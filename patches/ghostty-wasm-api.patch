@@ -1,43 +1,59 @@
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
-index 6d4406e88..e6fac7b02 100644
+index 6d4406e88..47877792f 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -230,6 +230,35 @@ comptime {
+@@ -212,7 +212,7 @@ comptime {
+         @export(&c.terminal_selection_format_buf, .{ .name = "ghostty_terminal_selection_format_buf" });
+         @export(&c.terminal_selection_format_alloc, .{ .name = "ghostty_terminal_selection_format_alloc" });
+         @export(&c.render_state_new, .{ .name = "ghostty_render_state_new" });
+-        @export(&c.render_state_update, .{ .name = "ghostty_render_state_update" });
++        @export(&c.render_state_update, .{ .name = "ghostty_core_render_state_update" });
+         @export(&c.render_state_get, .{ .name = "ghostty_render_state_get" });
+         @export(&c.render_state_get_multi, .{ .name = "ghostty_render_state_get_multi" });
+         @export(&c.render_state_set, .{ .name = "ghostty_render_state_set" });
+@@ -230,10 +230,39 @@ comptime {
          @export(&c.render_state_row_cells_get_multi, .{ .name = "ghostty_render_state_row_cells_get_multi" });
          @export(&c.render_state_row_cells_free, .{ .name = "ghostty_render_state_row_cells_free" });
          @export(&c.render_state_free, .{ .name = "ghostty_render_state_free" });
-+        @export(&c.web.new, .{ .name = "ghostty_web_terminal_new" });
-+        @export(&c.web.newWithConfig, .{ .name = "ghostty_web_terminal_new_with_config" });
-+        @export(&c.web.free, .{ .name = "ghostty_web_terminal_free" });
-+        @export(&c.web.resize, .{ .name = "ghostty_web_terminal_resize" });
-+        @export(&c.web.write, .{ .name = "ghostty_web_terminal_write" });
-+        @export(&c.web.renderStateUpdate, .{ .name = "ghostty_web_render_state_update" });
-+        @export(&c.web.renderStateGetCols, .{ .name = "ghostty_web_render_state_get_cols" });
-+        @export(&c.web.renderStateGetRows, .{ .name = "ghostty_web_render_state_get_rows" });
-+        @export(&c.web.renderStateGetCursorX, .{ .name = "ghostty_web_render_state_get_cursor_x" });
-+        @export(&c.web.renderStateGetCursorY, .{ .name = "ghostty_web_render_state_get_cursor_y" });
-+        @export(&c.web.renderStateGetCursorVisible, .{ .name = "ghostty_web_render_state_get_cursor_visible" });
-+        @export(&c.web.renderStateGetBgColor, .{ .name = "ghostty_web_render_state_get_bg_color" });
-+        @export(&c.web.renderStateGetFgColor, .{ .name = "ghostty_web_render_state_get_fg_color" });
-+        @export(&c.web.renderStateIsRowDirty, .{ .name = "ghostty_web_render_state_is_row_dirty" });
-+        @export(&c.web.renderStateMarkClean, .{ .name = "ghostty_web_render_state_mark_clean" });
-+        @export(&c.web.renderStateGetViewport, .{ .name = "ghostty_web_render_state_get_viewport" });
-+        @export(&c.web.renderStateGetGrapheme, .{ .name = "ghostty_web_render_state_get_grapheme" });
-+        @export(&c.web.isAlternateScreen, .{ .name = "ghostty_web_terminal_is_alternate_screen" });
-+        @export(&c.web.hasMouseTracking, .{ .name = "ghostty_web_terminal_has_mouse_tracking" });
-+        @export(&c.web.getMode, .{ .name = "ghostty_web_terminal_get_mode" });
-+        @export(&c.web.getScrollbackLength, .{ .name = "ghostty_web_terminal_get_scrollback_length" });
-+        @export(&c.web.getScrollbackLine, .{ .name = "ghostty_web_terminal_get_scrollback_line" });
-+        @export(&c.web.getScrollbackGrapheme, .{ .name = "ghostty_web_terminal_get_scrollback_grapheme" });
-+        @export(&c.web.isRowWrapped, .{ .name = "ghostty_web_terminal_is_row_wrapped" });
-+        @export(&c.web.getHyperlinkUri, .{ .name = "ghostty_web_terminal_get_hyperlink_uri" });
-+        @export(&c.web.getScrollbackHyperlinkUri, .{ .name = "ghostty_web_terminal_get_scrollback_hyperlink_uri" });
-+        @export(&c.web.hasResponse, .{ .name = "ghostty_web_terminal_has_response" });
-+        @export(&c.web.readResponse, .{ .name = "ghostty_web_terminal_read_response" });
+-        @export(&c.terminal_new, .{ .name = "ghostty_terminal_new" });
+-        @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
++        @export(&c.web.new, .{ .name = "ghostty_terminal_new" });
++        @export(&c.web.newWithConfig, .{ .name = "ghostty_terminal_new_with_config" });
++        @export(&c.web.free, .{ .name = "ghostty_terminal_free" });
++        @export(&c.web.resize, .{ .name = "ghostty_terminal_resize" });
++        @export(&c.web.write, .{ .name = "ghostty_terminal_write" });
++        @export(&c.web.renderStateUpdate, .{ .name = "ghostty_render_state_update" });
++        @export(&c.web.renderStateGetCols, .{ .name = "ghostty_render_state_get_cols" });
++        @export(&c.web.renderStateGetRows, .{ .name = "ghostty_render_state_get_rows" });
++        @export(&c.web.renderStateGetCursorX, .{ .name = "ghostty_render_state_get_cursor_x" });
++        @export(&c.web.renderStateGetCursorY, .{ .name = "ghostty_render_state_get_cursor_y" });
++        @export(&c.web.renderStateGetCursorVisible, .{ .name = "ghostty_render_state_get_cursor_visible" });
++        @export(&c.web.renderStateGetBgColor, .{ .name = "ghostty_render_state_get_bg_color" });
++        @export(&c.web.renderStateGetFgColor, .{ .name = "ghostty_render_state_get_fg_color" });
++        @export(&c.web.renderStateIsRowDirty, .{ .name = "ghostty_render_state_is_row_dirty" });
++        @export(&c.web.renderStateMarkClean, .{ .name = "ghostty_render_state_mark_clean" });
++        @export(&c.web.renderStateGetViewport, .{ .name = "ghostty_render_state_get_viewport" });
++        @export(&c.web.renderStateGetGrapheme, .{ .name = "ghostty_render_state_get_grapheme" });
++        @export(&c.web.isAlternateScreen, .{ .name = "ghostty_terminal_is_alternate_screen" });
++        @export(&c.web.hasMouseTracking, .{ .name = "ghostty_terminal_has_mouse_tracking" });
++        @export(&c.web.getMode, .{ .name = "ghostty_terminal_get_mode" });
++        @export(&c.web.getScrollbackLength, .{ .name = "ghostty_terminal_get_scrollback_length" });
++        @export(&c.web.getScrollbackLine, .{ .name = "ghostty_terminal_get_scrollback_line" });
++        @export(&c.web.getScrollbackGrapheme, .{ .name = "ghostty_terminal_get_scrollback_grapheme" });
++        @export(&c.web.isRowWrapped, .{ .name = "ghostty_terminal_is_row_wrapped" });
++        @export(&c.web.getHyperlinkUri, .{ .name = "ghostty_terminal_get_hyperlink_uri" });
++        @export(&c.web.getScrollbackHyperlinkUri, .{ .name = "ghostty_terminal_get_scrollback_hyperlink_uri" });
++        @export(&c.web.hasResponse, .{ .name = "ghostty_terminal_has_response" });
++        @export(&c.web.readResponse, .{ .name = "ghostty_terminal_read_response" });
 +
-         @export(&c.terminal_new, .{ .name = "ghostty_terminal_new" });
-         @export(&c.terminal_free, .{ .name = "ghostty_terminal_free" });
++        @export(&c.terminal_new, .{ .name = "ghostty_core_terminal_new" });
++        @export(&c.terminal_free, .{ .name = "ghostty_core_terminal_free" });
          @export(&c.terminal_reset, .{ .name = "ghostty_terminal_reset" });
+-        @export(&c.terminal_resize, .{ .name = "ghostty_terminal_resize" });
++        @export(&c.terminal_resize, .{ .name = "ghostty_core_terminal_resize" });
+         @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
+         @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
+         @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
 index 648bdbe51..1a81f26bc 100644
 --- a/src/terminal/c/main.zig

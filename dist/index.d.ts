@@ -425,7 +425,7 @@ export declare class GhosttyTerminal {
 }
 
 /**
- * Terminal configuration (passed to ghostty_web_terminal_new_with_config)
+ * Terminal configuration (passed to ghostty_terminal_new_with_config)
  * All color values use 0xRRGGBB format. A value of 0 means "use default".
  */
 declare interface GhosttyTerminalConfig {
@@ -470,34 +470,34 @@ declare interface GhosttyWasmExports extends WebAssembly.Exports {
     ghostty_key_event_set_key(event: number, key: number): void;
     ghostty_key_event_set_mods(event: number, mods: number): void;
     ghostty_key_event_set_utf8(event: number, ptr: number, len: number): void;
-    ghostty_web_terminal_new(cols: number, rows: number): TerminalHandle;
-    ghostty_web_terminal_new_with_config(cols: number, rows: number, configPtr: number): TerminalHandle;
-    ghostty_web_terminal_free(terminal: TerminalHandle): void;
-    ghostty_web_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
-    ghostty_web_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
-    ghostty_web_render_state_update(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_cols(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_rows(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_cursor_x(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_cursor_y(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_cursor_visible(terminal: TerminalHandle): boolean;
-    ghostty_web_render_state_get_bg_color(terminal: TerminalHandle): number;
-    ghostty_web_render_state_get_fg_color(terminal: TerminalHandle): number;
-    ghostty_web_render_state_is_row_dirty(terminal: TerminalHandle, row: number): boolean;
-    ghostty_web_render_state_mark_clean(terminal: TerminalHandle): void;
-    ghostty_web_render_state_get_viewport(terminal: TerminalHandle, bufPtr: number, bufLen: number): number;
-    ghostty_web_render_state_get_grapheme(terminal: TerminalHandle, row: number, col: number, bufPtr: number, bufLen: number): number;
-    ghostty_web_terminal_is_alternate_screen(terminal: TerminalHandle): boolean;
-    ghostty_web_terminal_has_mouse_tracking(terminal: TerminalHandle): number;
-    ghostty_web_terminal_get_mode(terminal: TerminalHandle, mode: number, isAnsi: boolean): number;
-    ghostty_web_terminal_get_scrollback_length(terminal: TerminalHandle): number;
-    ghostty_web_terminal_get_scrollback_line(terminal: TerminalHandle, offset: number, bufPtr: number, bufLen: number): number;
-    ghostty_web_terminal_get_scrollback_grapheme(terminal: TerminalHandle, offset: number, col: number, bufPtr: number, bufLen: number): number;
-    ghostty_web_terminal_is_row_wrapped(terminal: TerminalHandle, row: number): number;
-    ghostty_web_terminal_get_hyperlink_uri(terminal: TerminalHandle, row: number, col: number, bufPtr: number, bufLen: number): number;
-    ghostty_web_terminal_get_scrollback_hyperlink_uri(terminal: TerminalHandle, offset: number, col: number, bufPtr: number, bufLen: number): number;
-    ghostty_web_terminal_has_response(terminal: TerminalHandle): boolean;
-    ghostty_web_terminal_read_response(terminal: TerminalHandle, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_new(cols: number, rows: number): TerminalHandle;
+    ghostty_terminal_new_with_config(cols: number, rows: number, configPtr: number): TerminalHandle;
+    ghostty_terminal_free(terminal: TerminalHandle): void;
+    ghostty_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
+    ghostty_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
+    ghostty_render_state_update(terminal: TerminalHandle): number;
+    ghostty_render_state_get_cols(terminal: TerminalHandle): number;
+    ghostty_render_state_get_rows(terminal: TerminalHandle): number;
+    ghostty_render_state_get_cursor_x(terminal: TerminalHandle): number;
+    ghostty_render_state_get_cursor_y(terminal: TerminalHandle): number;
+    ghostty_render_state_get_cursor_visible(terminal: TerminalHandle): boolean;
+    ghostty_render_state_get_bg_color(terminal: TerminalHandle): number;
+    ghostty_render_state_get_fg_color(terminal: TerminalHandle): number;
+    ghostty_render_state_is_row_dirty(terminal: TerminalHandle, row: number): boolean;
+    ghostty_render_state_mark_clean(terminal: TerminalHandle): void;
+    ghostty_render_state_get_viewport(terminal: TerminalHandle, bufPtr: number, bufLen: number): number;
+    ghostty_render_state_get_grapheme(terminal: TerminalHandle, row: number, col: number, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_is_alternate_screen(terminal: TerminalHandle): boolean;
+    ghostty_terminal_has_mouse_tracking(terminal: TerminalHandle): number;
+    ghostty_terminal_get_mode(terminal: TerminalHandle, mode: number, isAnsi: boolean): number;
+    ghostty_terminal_get_scrollback_length(terminal: TerminalHandle): number;
+    ghostty_terminal_get_scrollback_line(terminal: TerminalHandle, offset: number, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_get_scrollback_grapheme(terminal: TerminalHandle, offset: number, col: number, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_is_row_wrapped(terminal: TerminalHandle, row: number): number;
+    ghostty_terminal_get_hyperlink_uri(terminal: TerminalHandle, row: number, col: number, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_get_scrollback_hyperlink_uri(terminal: TerminalHandle, offset: number, col: number, bufPtr: number, bufLen: number): number;
+    ghostty_terminal_has_response(terminal: TerminalHandle): boolean;
+    ghostty_terminal_read_response(terminal: TerminalHandle, bufPtr: number, bufLen: number): number;
 }
 
 /**
