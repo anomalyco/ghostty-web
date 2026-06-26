@@ -408,29 +408,33 @@ export interface GhosttyWasmExports extends WebAssembly.Exports {
   ghostty_key_event_set_utf8(event: number, ptr: number, len: number): void;
 
   // Terminal lifecycle
-  ghostty_terminal_new(cols: number, rows: number): TerminalHandle;
-  ghostty_terminal_new_with_config(cols: number, rows: number, configPtr: number): TerminalHandle;
-  ghostty_terminal_free(terminal: TerminalHandle): void;
-  ghostty_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
-  ghostty_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
+  ghostty_web_terminal_new(cols: number, rows: number): TerminalHandle;
+  ghostty_web_terminal_new_with_config(
+    cols: number,
+    rows: number,
+    configPtr: number
+  ): TerminalHandle;
+  ghostty_web_terminal_free(terminal: TerminalHandle): void;
+  ghostty_web_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
+  ghostty_web_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
 
   // RenderState API - high-performance rendering (ONE call gets ALL data)
-  ghostty_render_state_update(terminal: TerminalHandle): number; // 0=none, 1=partial, 2=full
-  ghostty_render_state_get_cols(terminal: TerminalHandle): number;
-  ghostty_render_state_get_rows(terminal: TerminalHandle): number;
-  ghostty_render_state_get_cursor_x(terminal: TerminalHandle): number;
-  ghostty_render_state_get_cursor_y(terminal: TerminalHandle): number;
-  ghostty_render_state_get_cursor_visible(terminal: TerminalHandle): boolean;
-  ghostty_render_state_get_bg_color(terminal: TerminalHandle): number; // 0xRRGGBB
-  ghostty_render_state_get_fg_color(terminal: TerminalHandle): number; // 0xRRGGBB
-  ghostty_render_state_is_row_dirty(terminal: TerminalHandle, row: number): boolean;
-  ghostty_render_state_mark_clean(terminal: TerminalHandle): void;
-  ghostty_render_state_get_viewport(
+  ghostty_web_render_state_update(terminal: TerminalHandle): number; // 0=none, 1=partial, 2=full
+  ghostty_web_render_state_get_cols(terminal: TerminalHandle): number;
+  ghostty_web_render_state_get_rows(terminal: TerminalHandle): number;
+  ghostty_web_render_state_get_cursor_x(terminal: TerminalHandle): number;
+  ghostty_web_render_state_get_cursor_y(terminal: TerminalHandle): number;
+  ghostty_web_render_state_get_cursor_visible(terminal: TerminalHandle): boolean;
+  ghostty_web_render_state_get_bg_color(terminal: TerminalHandle): number; // 0xRRGGBB
+  ghostty_web_render_state_get_fg_color(terminal: TerminalHandle): number; // 0xRRGGBB
+  ghostty_web_render_state_is_row_dirty(terminal: TerminalHandle, row: number): boolean;
+  ghostty_web_render_state_mark_clean(terminal: TerminalHandle): void;
+  ghostty_web_render_state_get_viewport(
     terminal: TerminalHandle,
     bufPtr: number,
     bufLen: number
   ): number; // Returns total cells written or -1 on error
-  ghostty_render_state_get_grapheme(
+  ghostty_web_render_state_get_grapheme(
     terminal: TerminalHandle,
     row: number,
     col: number,
@@ -439,36 +443,36 @@ export interface GhosttyWasmExports extends WebAssembly.Exports {
   ): number; // Returns count of codepoints or -1 on error
 
   // Terminal modes
-  ghostty_terminal_is_alternate_screen(terminal: TerminalHandle): boolean;
-  ghostty_terminal_has_mouse_tracking(terminal: TerminalHandle): number;
-  ghostty_terminal_get_mode(terminal: TerminalHandle, mode: number, isAnsi: boolean): number;
+  ghostty_web_terminal_is_alternate_screen(terminal: TerminalHandle): boolean;
+  ghostty_web_terminal_has_mouse_tracking(terminal: TerminalHandle): number;
+  ghostty_web_terminal_get_mode(terminal: TerminalHandle, mode: number, isAnsi: boolean): number;
 
   // Scrollback API
-  ghostty_terminal_get_scrollback_length(terminal: TerminalHandle): number;
-  ghostty_terminal_get_scrollback_line(
+  ghostty_web_terminal_get_scrollback_length(terminal: TerminalHandle): number;
+  ghostty_web_terminal_get_scrollback_line(
     terminal: TerminalHandle,
     offset: number,
     bufPtr: number,
     bufLen: number
   ): number; // Returns cells written or -1 on error
-  ghostty_terminal_get_scrollback_grapheme(
+  ghostty_web_terminal_get_scrollback_grapheme(
     terminal: TerminalHandle,
     offset: number,
     col: number,
     bufPtr: number,
     bufLen: number
   ): number; // Returns codepoint count or -1 on error
-  ghostty_terminal_is_row_wrapped(terminal: TerminalHandle, row: number): number;
+  ghostty_web_terminal_is_row_wrapped(terminal: TerminalHandle, row: number): number;
 
   // Hyperlink API
-  ghostty_terminal_get_hyperlink_uri(
+  ghostty_web_terminal_get_hyperlink_uri(
     terminal: TerminalHandle,
     row: number,
     col: number,
     bufPtr: number,
     bufLen: number
   ): number; // Returns bytes written, 0 if no hyperlink, -1 on error
-  ghostty_terminal_get_scrollback_hyperlink_uri(
+  ghostty_web_terminal_get_scrollback_hyperlink_uri(
     terminal: TerminalHandle,
     offset: number,
     col: number,
@@ -477,8 +481,12 @@ export interface GhosttyWasmExports extends WebAssembly.Exports {
   ): number; // Returns bytes written, 0 if no hyperlink, -1 on error
 
   // Response API (for DSR and other terminal queries)
-  ghostty_terminal_has_response(terminal: TerminalHandle): boolean;
-  ghostty_terminal_read_response(terminal: TerminalHandle, bufPtr: number, bufLen: number): number; // Returns bytes written, 0 if no response, -1 on error
+  ghostty_web_terminal_has_response(terminal: TerminalHandle): boolean;
+  ghostty_web_terminal_read_response(
+    terminal: TerminalHandle,
+    bufPtr: number,
+    bufLen: number
+  ): number; // Returns bytes written, 0 if no response, -1 on error
 }
 
 // ============================================================================
@@ -528,7 +536,7 @@ export const CURSOR_STRUCT_SIZE = 8;
 export const COLORS_STRUCT_SIZE = 12;
 
 /**
- * Terminal configuration (passed to ghostty_terminal_new_with_config)
+ * Terminal configuration (passed to ghostty_web_terminal_new_with_config)
  * All color values use 0xRRGGBB format. A value of 0 means "use default".
  */
 export interface GhosttyTerminalConfig {
@@ -601,7 +609,7 @@ export interface Cursor {
 }
 
 /**
- * Terminal configuration (passed to ghostty_terminal_new_with_config)
+ * Terminal configuration (passed to ghostty_web_terminal_new_with_config)
  */
 export interface TerminalConfig {
   scrollback_limit: number; // Number of scrollback lines (default: 10,000)

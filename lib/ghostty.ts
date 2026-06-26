@@ -314,13 +314,13 @@ export class GhosttyTerminal {
           offset += 4;
         }
 
-        this.handle = this.exports.ghostty_terminal_new_with_config(cols, rows, configPtr);
+        this.handle = this.exports.ghostty_web_terminal_new_with_config(cols, rows, configPtr);
       } finally {
         // Free the config memory
         this.exports.ghostty_wasm_free_u8_array(configPtr, GHOSTTY_CONFIG_SIZE);
       }
     } else {
-      this.handle = this.exports.ghostty_terminal_new(cols, rows);
+      this.handle = this.exports.ghostty_web_terminal_new(cols, rows);
     }
 
     if (!this.handle) throw new Error('Failed to create terminal');
@@ -343,7 +343,7 @@ export class GhosttyTerminal {
     const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
     const ptr = this.exports.ghostty_wasm_alloc_u8_array(bytes.length);
     new Uint8Array(this.memory.buffer).set(bytes, ptr);
-    this.exports.ghostty_terminal_write(this.handle, ptr, bytes.length);
+    this.exports.ghostty_web_terminal_write(this.handle, ptr, bytes.length);
     this.exports.ghostty_wasm_free_u8_array(ptr, bytes.length);
   }
 
@@ -351,7 +351,7 @@ export class GhosttyTerminal {
     if (cols === this._cols && rows === this._rows) return;
     this._cols = cols;
     this._rows = rows;
-    this.exports.ghostty_terminal_resize(this.handle, cols, rows);
+    this.exports.ghostty_web_terminal_resize(this.handle, cols, rows);
     this.invalidateBuffers();
     this.initCellPool();
   }
@@ -361,7 +361,7 @@ export class GhosttyTerminal {
       this.exports.ghostty_wasm_free_u8_array(this.viewportBufferPtr, this.viewportBufferSize);
       this.viewportBufferPtr = 0;
     }
-    this.exports.ghostty_terminal_free(this.handle);
+    this.exports.ghostty_web_terminal_free(this.handle);
   }
 
   // ==========================================================================
@@ -382,7 +382,7 @@ export class GhosttyTerminal {
    * Safe to call multiple times - dirty state persists until markClean().
    */
   update(): DirtyState {
-    return this.exports.ghostty_render_state_update(this.handle) as DirtyState;
+    return this.exports.ghostty_web_render_state_update(this.handle) as DirtyState;
   }
 
   /**
@@ -394,11 +394,11 @@ export class GhosttyTerminal {
     // This is safe to call multiple times - dirty state persists until markClean().
     this.update();
     return {
-      x: this.exports.ghostty_render_state_get_cursor_x(this.handle),
-      y: this.exports.ghostty_render_state_get_cursor_y(this.handle),
-      viewportX: this.exports.ghostty_render_state_get_cursor_x(this.handle),
-      viewportY: this.exports.ghostty_render_state_get_cursor_y(this.handle),
-      visible: this.exports.ghostty_render_state_get_cursor_visible(this.handle),
+      x: this.exports.ghostty_web_render_state_get_cursor_x(this.handle),
+      y: this.exports.ghostty_web_render_state_get_cursor_y(this.handle),
+      viewportX: this.exports.ghostty_web_render_state_get_cursor_x(this.handle),
+      viewportY: this.exports.ghostty_web_render_state_get_cursor_y(this.handle),
+      visible: this.exports.ghostty_web_render_state_get_cursor_visible(this.handle),
       blinking: false, // TODO: Add blinking support
       style: 'block', // TODO: Add style support
     };
@@ -408,8 +408,8 @@ export class GhosttyTerminal {
    * Get default colors from render state
    */
   getColors(): RenderStateColors {
-    const bg = this.exports.ghostty_render_state_get_bg_color(this.handle);
-    const fg = this.exports.ghostty_render_state_get_fg_color(this.handle);
+    const bg = this.exports.ghostty_web_render_state_get_bg_color(this.handle);
+    const fg = this.exports.ghostty_web_render_state_get_fg_color(this.handle);
     return {
       background: {
         r: (bg >> 16) & 0xff,
@@ -429,14 +429,14 @@ export class GhosttyTerminal {
    * Check if a specific row is dirty
    */
   isRowDirty(y: number): boolean {
-    return this.exports.ghostty_render_state_is_row_dirty(this.handle, y);
+    return this.exports.ghostty_web_render_state_is_row_dirty(this.handle, y);
   }
 
   /**
    * Mark render state as clean (call after rendering)
    */
   markClean(): void {
-    this.exports.ghostty_render_state_mark_clean(this.handle);
+    this.exports.ghostty_web_render_state_mark_clean(this.handle);
   }
 
   /**
@@ -457,7 +457,7 @@ export class GhosttyTerminal {
     }
 
     // Get all cells in one call
-    const count = this.exports.ghostty_render_state_get_viewport(
+    const count = this.exports.ghostty_web_render_state_get_viewport(
       this.handle,
       this.viewportBufferPtr,
       totalCells
@@ -513,7 +513,7 @@ export class GhosttyTerminal {
   // ==========================================================================
 
   isAlternateScreen(): boolean {
-    return !!this.exports.ghostty_terminal_is_alternate_screen(this.handle);
+    return !!this.exports.ghostty_web_terminal_is_alternate_screen(this.handle);
   }
 
   hasBracketedPaste(): boolean {
@@ -527,7 +527,7 @@ export class GhosttyTerminal {
   }
 
   hasMouseTracking(): boolean {
-    return this.exports.ghostty_terminal_has_mouse_tracking(this.handle) !== 0;
+    return this.exports.ghostty_web_terminal_has_mouse_tracking(this.handle) !== 0;
   }
 
   // ==========================================================================
@@ -541,7 +541,7 @@ export class GhosttyTerminal {
 
   /** Get number of scrollback lines (history, not including active screen) */
   getScrollbackLength(): number {
-    return this.exports.ghostty_terminal_get_scrollback_length(this.handle);
+    return this.exports.ghostty_web_terminal_get_scrollback_length(this.handle);
   }
 
   /**
@@ -565,7 +565,7 @@ export class GhosttyTerminal {
     // This is safe to call multiple times - dirty state persists until markClean().
     this.update();
 
-    const count = this.exports.ghostty_terminal_get_scrollback_line(
+    const count = this.exports.ghostty_web_terminal_get_scrollback_line(
       this.handle,
       offset,
       this.viewportBufferPtr,
@@ -602,7 +602,7 @@ export class GhosttyTerminal {
 
   /** Check if a row in the active screen is wrapped (soft-wrapped to next line) */
   isRowWrapped(row: number): boolean {
-    return this.exports.ghostty_terminal_is_row_wrapped(this.handle, row) !== 0;
+    return this.exports.ghostty_web_terminal_is_row_wrapped(this.handle, row) !== 0;
   }
 
   /**
@@ -613,7 +613,7 @@ export class GhosttyTerminal {
    */
   getHyperlinkUri(row: number, col: number): string | null {
     // Check if WASM has this function (requires rebuilt WASM with hyperlink support)
-    if (!this.exports.ghostty_terminal_get_hyperlink_uri) {
+    if (!this.exports.ghostty_web_terminal_get_hyperlink_uri) {
       return null;
     }
 
@@ -624,7 +624,7 @@ export class GhosttyTerminal {
       const bufPtr = this.exports.ghostty_wasm_alloc_u8_array(bufSize);
 
       try {
-        const bytesWritten = this.exports.ghostty_terminal_get_hyperlink_uri(
+        const bytesWritten = this.exports.ghostty_web_terminal_get_hyperlink_uri(
           this.handle,
           row,
           col,
@@ -660,7 +660,7 @@ export class GhosttyTerminal {
    */
   getScrollbackHyperlinkUri(offset: number, col: number): string | null {
     // Check if WASM has this function
-    if (!this.exports.ghostty_terminal_get_scrollback_hyperlink_uri) {
+    if (!this.exports.ghostty_web_terminal_get_scrollback_hyperlink_uri) {
       return null;
     }
 
@@ -671,7 +671,7 @@ export class GhosttyTerminal {
       const bufPtr = this.exports.ghostty_wasm_alloc_u8_array(bufSize);
 
       try {
-        const bytesWritten = this.exports.ghostty_terminal_get_scrollback_hyperlink_uri(
+        const bytesWritten = this.exports.ghostty_web_terminal_get_scrollback_hyperlink_uri(
           this.handle,
           offset,
           col,
@@ -704,7 +704,7 @@ export class GhosttyTerminal {
    * Responses are generated by escape sequences like DSR (Device Status Report).
    */
   hasResponse(): boolean {
-    return this.exports.ghostty_terminal_has_response(this.handle);
+    return this.exports.ghostty_web_terminal_has_response(this.handle);
   }
 
   /**
@@ -722,7 +722,11 @@ export class GhosttyTerminal {
     const bufPtr = this.exports.ghostty_wasm_alloc_u8_array(bufSize);
 
     try {
-      const bytesRead = this.exports.ghostty_terminal_read_response(this.handle, bufPtr, bufSize);
+      const bytesRead = this.exports.ghostty_web_terminal_read_response(
+        this.handle,
+        bufPtr,
+        bufSize
+      );
 
       if (bytesRead <= 0) return null;
 
@@ -739,7 +743,7 @@ export class GhosttyTerminal {
    * @param isAnsi True for ANSI modes, false for DEC modes (default: false)
    */
   getMode(mode: number, isAnsi: boolean = false): boolean {
-    return this.exports.ghostty_terminal_get_mode(this.handle, mode, isAnsi) !== 0;
+    return this.exports.ghostty_web_terminal_get_mode(this.handle, mode, isAnsi) !== 0;
   }
 
   // ==========================================================================
@@ -806,7 +810,7 @@ export class GhosttyTerminal {
       this.graphemeBuffer = new Uint32Array(this.memory.buffer, this.graphemeBufferPtr, 16);
     }
 
-    const count = this.exports.ghostty_render_state_get_grapheme(
+    const count = this.exports.ghostty_web_render_state_get_grapheme(
       this.handle,
       row,
       col,
@@ -844,7 +848,7 @@ export class GhosttyTerminal {
       this.graphemeBuffer = new Uint32Array(this.memory.buffer, this.graphemeBufferPtr, 16);
     }
 
-    const count = this.exports.ghostty_terminal_get_scrollback_grapheme(
+    const count = this.exports.ghostty_web_terminal_get_scrollback_grapheme(
       this.handle,
       offset,
       col,

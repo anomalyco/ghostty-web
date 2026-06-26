@@ -18,7 +18,7 @@ ZIG_VERSION=$(zig version)
 echo "✓ Found Zig $ZIG_VERSION"
 
 # Initialize/update submodule
-if [ ! -d "ghostty/.git" ]; then
+if ! git -C ghostty rev-parse --git-dir &> /dev/null; then
     echo "📦 Initializing Ghostty submodule..."
     git submodule update --init --recursive
 else
@@ -37,7 +37,7 @@ git apply ../patches/ghostty-wasm-api.patch
 
 # Build WASM
 echo "⚙️  Building WASM (takes ~20 seconds)..."
-zig build lib-vt -Dtarget=wasm32-freestanding -Doptimize=ReleaseSmall
+zig build -Demit-lib-vt=true -Dtarget=wasm32-freestanding -Doptimize=ReleaseSmall
 
 # Copy to project root
 cd ..
@@ -48,8 +48,7 @@ echo "🧹 Cleaning up..."
 cd ghostty
 git apply -R ../patches/ghostty-wasm-api.patch
 # Remove new files created by the patch
-rm -f include/ghostty/vt/terminal.h
-rm -f src/terminal/c/terminal.zig
+rm -f src/terminal/c/web.zig
 cd ..
 
 SIZE=$(du -h ghostty-vt.wasm | cut -f1)
