@@ -14,6 +14,7 @@ export interface ITerminalOptions {
   fontSize?: number; // Default: 15
   fontFamily?: string; // Default: 'monospace'
   allowTransparency?: boolean;
+  colorScheme?: 'dark' | 'light';
 
   // Phase 1 additions
   convertEol?: boolean; // Convert \n to \r\n (default: false)

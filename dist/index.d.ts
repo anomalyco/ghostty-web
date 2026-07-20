@@ -7,6 +7,7 @@ export declare class CanvasRenderer {
     private cursorBlink;
     private theme;
     private devicePixelRatio;
+    private readonly tracksDevicePixelRatio;
     private metrics;
     private palette;
     private cursorVisible;
@@ -185,6 +186,7 @@ export declare class FitAddon implements ITerminalAddon {
     private _lastCols?;
     private _lastRows?;
     private _isResizing;
+    private _fitPending;
     /**
      * Activate the addon (called by Terminal.loadAddon)
      */
@@ -286,6 +288,8 @@ export declare class GhosttyTerminal {
     constructor(exports: GhosttyWasmExports, memory: WebAssembly.Memory, cols?: number, rows?: number, config?: GhosttyTerminalConfig);
     get cols(): number;
     get rows(): number;
+    setColorScheme(scheme: 'dark' | 'light'): void;
+    setConfig(config: GhosttyTerminalConfig): void;
     write(data: string | Uint8Array): void;
     resize(cols: number, rows: number): void;
     free(): void;
@@ -426,7 +430,7 @@ export declare class GhosttyTerminal {
 
 /**
  * Terminal configuration (passed to ghostty_terminal_new_with_config)
- * All color values use 0xRRGGBB format. A value of 0 means "use default".
+ * All color values use 0xRRGGBB format.
  */
 declare interface GhosttyTerminalConfig {
     scrollbackLimit?: number;
@@ -475,6 +479,8 @@ declare interface GhosttyWasmExports extends WebAssembly.Exports {
     ghostty_terminal_free(terminal: TerminalHandle): void;
     ghostty_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
     ghostty_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
+    ghostty_terminal_set_color_scheme(terminal: TerminalHandle, scheme: number): void;
+    ghostty_terminal_set_config(terminal: TerminalHandle, configPtr: number): void;
     ghostty_render_state_update(terminal: TerminalHandle): number;
     ghostty_render_state_get_cols(terminal: TerminalHandle): number;
     ghostty_render_state_get_rows(terminal: TerminalHandle): number;
@@ -1012,6 +1018,7 @@ export declare interface ITerminalOptions {
     fontSize?: number;
     fontFamily?: string;
     allowTransparency?: boolean;
+    colorScheme?: 'dark' | 'light';
     convertEol?: boolean;
     disableStdin?: boolean;
     smoothScrollDuration?: number;
@@ -1739,6 +1746,7 @@ export declare class Terminal implements ITerminalCore {
      * @param wasUserInput - If true, triggers onData event (default: false for compat with some apps)
      */
     input(data: string, wasUserInput?: boolean): void;
+    setOption<K extends keyof ITerminalOptions>(key: K, value: ITerminalOptions[K]): void;
     /**
      * Resize terminal
      */

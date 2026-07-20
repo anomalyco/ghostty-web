@@ -335,6 +335,35 @@ export class GhosttyTerminal {
     return this._rows;
   }
 
+  setColorScheme(scheme: 'dark' | 'light'): void {
+    this.exports.ghostty_terminal_set_color_scheme(this.handle, scheme === 'dark' ? 1 : 0);
+  }
+
+  setConfig(config: GhosttyTerminalConfig): void {
+    const configPtr = this.exports.ghostty_wasm_alloc_u8_array(GHOSTTY_CONFIG_SIZE);
+    if (configPtr === 0) throw new Error('Failed to allocate config (out of memory)');
+
+    try {
+      const view = new DataView(this.memory.buffer);
+      let offset = configPtr;
+      view.setUint32(offset, config.scrollbackLimit ?? 10000, true);
+      offset += 4;
+      view.setUint32(offset, config.fgColor ?? 0, true);
+      offset += 4;
+      view.setUint32(offset, config.bgColor ?? 0, true);
+      offset += 4;
+      view.setUint32(offset, config.cursorColor ?? 0, true);
+      offset += 4;
+      for (let i = 0; i < 16; i++) {
+        view.setUint32(offset, config.palette?.[i] ?? 0, true);
+        offset += 4;
+      }
+      this.exports.ghostty_terminal_set_config(this.handle, configPtr);
+    } finally {
+      this.exports.ghostty_wasm_free_u8_array(configPtr, GHOSTTY_CONFIG_SIZE);
+    }
+  }
+
   // ==========================================================================
   // Lifecycle
   // ==========================================================================

@@ -100,6 +100,7 @@ export class CanvasRenderer {
   private cursorBlink: boolean;
   private theme: Required<ITheme>;
   private devicePixelRatio: number;
+  private readonly tracksDevicePixelRatio: boolean;
   private metrics: FontMetrics;
   private palette: string[];
 
@@ -152,6 +153,7 @@ export class CanvasRenderer {
     this.cursorStyle = options.cursorStyle ?? 'block';
     this.cursorBlink = options.cursorBlink ?? false;
     this.theme = { ...DEFAULT_THEME, ...options.theme };
+    this.tracksDevicePixelRatio = options.devicePixelRatio === undefined;
     this.devicePixelRatio = options.devicePixelRatio ?? window.devicePixelRatio ?? 1;
 
     // Build color palette (16 ANSI colors)
@@ -313,6 +315,8 @@ export class CanvasRenderer {
     scrollbackProvider?: IScrollbackProvider,
     scrollbarOpacity: number = 1
   ): void {
+    if (this.tracksDevicePixelRatio) this.devicePixelRatio = window.devicePixelRatio ?? 1;
+
     // Store buffer reference for grapheme lookups in renderCell
     this.currentBuffer = buffer;
 

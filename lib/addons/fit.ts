@@ -44,6 +44,7 @@ export class FitAddon implements ITerminalAddon {
   private _lastCols?: number;
   private _lastRows?: number;
   private _isResizing: boolean = false;
+  private _fitPending: boolean = false;
 
   /**
    * Activate the addon (called by Terminal.loadAddon)
@@ -84,6 +85,7 @@ export class FitAddon implements ITerminalAddon {
   public fit(): void {
     // Prevent re-entrant calls during resize
     if (this._isResizing) {
+      this._fitPending = true;
       return;
     }
 
@@ -122,6 +124,9 @@ export class FitAddon implements ITerminalAddon {
       // Clear flag after a short delay to allow DOM to settle
       setTimeout(() => {
         this._isResizing = false;
+        if (!this._fitPending) return;
+        this._fitPending = false;
+        this.fit();
       }, 50);
     }
   }
@@ -216,11 +221,6 @@ export class FitAddon implements ITerminalAddon {
 
     // Create ResizeObserver that watches for external size changes
     this._resizeObserver = new ResizeObserver((entries) => {
-      // Ignore resize events while we're actively resizing
-      if (this._isResizing) {
-        return;
-      }
-
       // Only trigger if the observed element's content rect changed
       const entry = entries[0];
       if (!entry) return;

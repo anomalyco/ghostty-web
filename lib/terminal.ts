@@ -34,7 +34,7 @@ import type {
 import { LinkDetector } from './link-detector';
 import { OSC8LinkProvider } from './providers/osc8-link-provider';
 import { UrlRegexProvider } from './providers/url-regex-provider';
-import { CanvasRenderer } from './renderer';
+import { CanvasRenderer, DEFAULT_THEME } from './renderer';
 import { SelectionManager } from './selection-manager';
 import type { ILink, ILinkProvider } from './types';
 
@@ -149,6 +149,7 @@ export class Terminal implements ITerminalCore {
       fontSize: options.fontSize ?? 15,
       fontFamily: options.fontFamily ?? 'monospace',
       allowTransparency: options.allowTransparency ?? false,
+      colorScheme: options.colorScheme ?? 'dark',
       convertEol: options.convertEol ?? false,
       disableStdin: options.disableStdin ?? false,
       smoothScrollDuration: options.smoothScrollDuration ?? 100, // Default: 100ms smooth scroll
@@ -203,8 +204,16 @@ export class Terminal implements ITerminalCore {
 
       case 'theme':
         if (this.renderer) {
-          console.warn('ghostty-web: theme changes after open() are not yet fully supported');
+          this.renderer.setTheme(this.options.theme);
+          const config = this.buildWasmConfig();
+          if (config) this.wasmTerm?.setConfig(config);
+          if (this.wasmTerm) this.renderer.render(this.wasmTerm, true, this.viewportY, this);
         }
+        break;
+
+      case 'colorScheme':
+        this.wasmTerm?.setColorScheme(this.options.colorScheme);
+        this.processTerminalResponses();
         break;
 
       case 'fontSize':
@@ -324,13 +333,11 @@ export class Terminal implements ITerminalCore {
    * Convert terminal options to WASM terminal config.
    */
   private buildWasmConfig(): GhosttyTerminalConfig | undefined {
-    const theme = this.options.theme;
+    const configuredTheme = this.options.theme;
     const scrollback = this.options.scrollback;
 
-    // If no theme and default scrollback, use defaults
-    if (!theme && scrollback === 10000) {
-      return undefined;
-    }
+    if (Object.keys(configuredTheme).length === 0 && scrollback === 10000) return undefined;
+    const theme = { ...DEFAULT_THEME, ...configuredTheme };
 
     // Build palette array from theme colors
     // Order: black, red, green, yellow, blue, magenta, cyan, white,
@@ -409,6 +416,7 @@ export class Terminal implements ITerminalCore {
       // Create WASM terminal with current dimensions and config
       const config = this.buildWasmConfig();
       this.wasmTerm = this.ghostty!.createTerminal(this.cols, this.rows, config);
+      this.wasmTerm.setColorScheme(this.options.colorScheme);
 
       // Create canvas element
       this.canvas = document.createElement('canvas');
@@ -693,6 +701,10 @@ export class Terminal implements ITerminalCore {
     }
   }
 
+  setOption<K extends keyof ITerminalOptions>(key: K, value: ITerminalOptions[K]): void {
+    this.options[key] = value as Required<ITerminalOptions>[K];
+  }
+
   /**
    * Resize terminal
    */
@@ -762,6 +774,7 @@ export class Terminal implements ITerminalCore {
     }
     const config = this.buildWasmConfig();
     this.wasmTerm = this.ghostty!.createTerminal(this.cols, this.rows, config);
+    this.wasmTerm.setColorScheme(this.options.colorScheme);
 
     // Clear renderer
     this.renderer!.clear();

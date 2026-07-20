@@ -1,5 +1,5 @@
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
-index 6d4406e88..47877792f 100644
+index 6d4406e88..6175a3b73 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
 @@ -212,7 +212,7 @@ comptime {
@@ -11,7 +11,7 @@ index 6d4406e88..47877792f 100644
          @export(&c.render_state_get, .{ .name = "ghostty_render_state_get" });
          @export(&c.render_state_get_multi, .{ .name = "ghostty_render_state_get_multi" });
          @export(&c.render_state_set, .{ .name = "ghostty_render_state_set" });
-@@ -230,10 +230,39 @@ comptime {
+@@ -230,10 +230,41 @@ comptime {
          @export(&c.render_state_row_cells_get_multi, .{ .name = "ghostty_render_state_row_cells_get_multi" });
          @export(&c.render_state_row_cells_free, .{ .name = "ghostty_render_state_row_cells_free" });
          @export(&c.render_state_free, .{ .name = "ghostty_render_state_free" });
@@ -22,6 +22,8 @@ index 6d4406e88..47877792f 100644
 +        @export(&c.web.free, .{ .name = "ghostty_terminal_free" });
 +        @export(&c.web.resize, .{ .name = "ghostty_terminal_resize" });
 +        @export(&c.web.write, .{ .name = "ghostty_terminal_write" });
++        @export(&c.web.setColorScheme, .{ .name = "ghostty_terminal_set_color_scheme" });
++        @export(&c.web.setConfig, .{ .name = "ghostty_terminal_set_config" });
 +        @export(&c.web.renderStateUpdate, .{ .name = "ghostty_render_state_update" });
 +        @export(&c.web.renderStateGetCols, .{ .name = "ghostty_render_state_get_cols" });
 +        @export(&c.web.renderStateGetRows, .{ .name = "ghostty_render_state_get_rows" });
@@ -68,10 +70,10 @@ index 648bdbe51..1a81f26bc 100644
  pub const build_info = buildpkg.get;
 diff --git a/src/terminal/c/web.zig b/src/terminal/c/web.zig
 new file mode 100644
-index 000000000..65f90ce04
+index 000000000..874853d57
 --- /dev/null
 +++ b/src/terminal/c/web.zig
-@@ -0,0 +1,744 @@
+@@ -0,0 +1,776 @@
 +//! ghostty-web compatibility API for libghostty-vt.
 +
 +const std = @import("std");
@@ -83,6 +85,7 @@ index 000000000..65f90ce04
 +const render = @import("../render.zig");
 +const RenderState = render.RenderState;
 +const color = @import("../color.zig");
++const device_status = @import("../device_status.zig");
 +const modespkg = @import("../modes.zig");
 +const pagepkg = @import("../page.zig");
 +const Page = pagepkg.Page;
@@ -93,6 +96,7 @@ index 000000000..65f90ce04
 +    terminal: terminal_c.Terminal,
 +    render_state: RenderState = .empty,
 +    response_buffer: std.ArrayList(u8) = .empty,
++    color_scheme: ?device_status.ColorScheme = null,
 +    last_screen_is_alternate: bool = false,
 +};
 +
@@ -103,6 +107,12 @@ index 000000000..65f90ce04
 +fn responseCallback(_: terminal_c.Terminal, userdata: ?*anyopaque, data: [*]const u8, len: usize) callconv(lib.calling_conv) void {
 +    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(userdata orelse return));
 +    wrapper.response_buffer.appendSlice(wrapper.alloc, data[0..len]) catch {};
++}
++
++fn colorSchemeCallback(_: terminal_c.Terminal, userdata: ?*anyopaque, scheme: *device_status.ColorScheme) callconv(lib.calling_conv) bool {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(userdata orelse return false));
++    scheme.* = wrapper.color_scheme orelse return false;
++    return true;
 +}
 +
 +/// C-compatible cell structure (16 bytes)
@@ -173,20 +183,44 @@ index 000000000..65f90ce04
 +    }
 +
 +    const t = zigTerminal(wrapper);
-+    if (config) |cfg| {
-+        if (cfg.fg_color != 0) t.colors.foreground = color.DynamicRGB.init(colorFromInt(cfg.fg_color));
-+        if (cfg.bg_color != 0) t.colors.background = color.DynamicRGB.init(colorFromInt(cfg.bg_color));
-+        if (cfg.cursor_color != 0) t.colors.cursor = color.DynamicRGB.init(colorFromInt(cfg.cursor_color));
-+        for (cfg.palette, 0..) |value, i| {
-+            if (value != 0) t.colors.palette.current[i] = colorFromInt(value);
-+        }
-+    }
++    if (config) |cfg| applyConfig(wrapper, cfg);
 +    t.modes.set(.linefeed, false);
 +    t.modes.set(.grapheme_cluster, true);
 +
 +    _ = terminal_c.set(wrapper.terminal, .userdata, wrapper);
 +    _ = terminal_c.set(wrapper.terminal, .write_pty, @ptrCast(&responseCallback));
++    _ = terminal_c.set(wrapper.terminal, .color_scheme, @ptrCast(&colorSchemeCallback));
 +    return @ptrCast(wrapper);
++}
++
++pub fn setColorScheme(ptr: ?*anyopaque, scheme_raw: c_int) callconv(.c) void {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(ptr orelse return));
++    const scheme = std.meta.intToEnum(device_status.ColorScheme, scheme_raw) catch return;
++    if (wrapper.color_scheme == scheme) return;
++    wrapper.color_scheme = scheme;
++    if (!zigTerminal(wrapper).modes.get(.report_color_scheme)) return;
++    const response = switch (scheme) {
++        .dark => "\x1B[?997;1n",
++        .light => "\x1B[?997;2n",
++    };
++    wrapper.response_buffer.appendSlice(wrapper.alloc, response) catch {};
++}
++
++pub fn setConfig(ptr: ?*anyopaque, config: ?*const GhosttyTerminalConfig) callconv(.c) void {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(ptr orelse return));
++    applyConfig(wrapper, config orelse return);
++}
++
++fn applyConfig(wrapper: *TerminalWrapper, config: *const GhosttyTerminalConfig) void {
++    const t = zigTerminal(wrapper);
++    t.colors.foreground.default = colorFromInt(config.fg_color);
++    t.colors.background.default = colorFromInt(config.bg_color);
++    t.colors.cursor.default = colorFromInt(config.cursor_color);
++    var palette = t.colors.palette.original;
++    for (config.palette, 0..) |value, i| {
++        palette[i] = colorFromInt(value);
++    }
++    t.colors.palette.changeDefault(palette);
 +}
 +
 +fn colorFromInt(value: u32) color.RGB {
