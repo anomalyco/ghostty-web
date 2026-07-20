@@ -425,6 +425,8 @@ export interface GhosttyWasmExports extends WebAssembly.Exports {
   ghostty_terminal_free(terminal: TerminalHandle): void;
   ghostty_terminal_resize(terminal: TerminalHandle, cols: number, rows: number): void;
   ghostty_terminal_write(terminal: TerminalHandle, dataPtr: number, dataLen: number): void;
+  ghostty_terminal_set_color_scheme(terminal: TerminalHandle, scheme: number): void;
+  ghostty_terminal_set_config(terminal: TerminalHandle, configPtr: number): void;
 
   // RenderState API - high-performance rendering (ONE call gets ALL data)
   ghostty_render_state_update(terminal: TerminalHandle): number; // 0=none, 1=partial, 2=full
@@ -541,7 +543,7 @@ export const COLORS_STRUCT_SIZE = 12;
 
 /**
  * Terminal configuration (passed to ghostty_terminal_new_with_config)
- * All color values use 0xRRGGBB format. A value of 0 means "use default".
+ * All color values use 0xRRGGBB format.
  */
 export interface GhosttyTerminalConfig {
   scrollbackLimit?: number;
