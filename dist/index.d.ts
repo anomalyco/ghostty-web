@@ -1677,7 +1677,7 @@ export declare class Terminal implements ITerminalCore {
     private animationFrameId?;
     private writeQueue;
     private fontLoadGeneration;
-    private terminalQueryBuffer;
+    private colorQueryBuffer;
     private addons;
     private customKeyEventHandler?;
     private currentTitle;
@@ -1969,7 +1969,7 @@ export declare class Terminal implements ITerminalCore {
      * buffered data is written all at once during terminal initialization).
      */
     private processTerminalResponses;
-    private processTerminalQueries;
+    private processColorQueries;
     /**
      * Check for title changes in written data (OSC sequences)
      * Simplified implementation - looks for OSC 0, 1, 2
