@@ -29,6 +29,8 @@ const legacyWebExports = [
   'ghostty_terminal_get_scrollback_hyperlink_uri',
   'ghostty_terminal_has_response',
   'ghostty_terminal_read_response',
+  'ghostty_sprite_has_codepoint',
+  'ghostty_sprite_rasterize',
 ] as const;
 
 test('the published ghostty-web WASM ABI remains available', async () => {

@@ -7,11 +7,15 @@ export declare class CanvasRenderer {
     private cursorBlink;
     private theme;
     private devicePixelRatio?;
+    private ghostty?;
     private activeDevicePixelRatio;
+    private metricsDevicePixelRatio;
     private canvasWidth;
     private canvasHeight;
     private metrics;
+    private deviceMetrics;
     private palette;
+    private spriteCache;
     private cursorVisible;
     private cursorBlinkInterval?;
     private lastCursorPosition;
@@ -25,6 +29,8 @@ export declare class CanvasRenderer {
     private previousHoveredLinkRange;
     constructor(canvas: HTMLCanvasElement, options?: RendererOptions);
     private measureFont;
+    private updateFontMetrics;
+    private getCSSMetrics;
     /**
      * Remeasure font metrics (call after font loads or changes)
      */
@@ -55,12 +61,17 @@ export declare class CanvasRenderer {
      * Selection highlighting is integrated here to avoid z-order issues with
      * complex glyphs (like Devanagari) that extend outside their cell bounds.
      */
-    private renderCellBackground;
+    private renderCellBackgrounds;
+    private getCellBackground;
     /**
      * Render a cell's text and decorations (Pass 2 of two-pass rendering)
      * Selection foreground color is applied here to match the selection background.
      */
     private renderCellText;
+    private fillDeviceDecoration;
+    private getCellForeground;
+    private getSprite;
+    private getDeviceThickness;
     /**
      * Render cursor
      */
@@ -242,9 +253,12 @@ export declare interface FontMetrics {
 export declare class Ghostty {
     private exports;
     private memory;
+    private spriteCodepoints;
     constructor(wasmInstance: WebAssembly.Instance);
     createKeyEncoder(): KeyEncoder;
     createTerminal(cols?: number, rows?: number, config?: GhosttyTerminalConfig): GhosttyTerminal;
+    hasSpriteCodepoint(codepoint: number): boolean;
+    rasterizeSprite(codepoint: number, cellWidth: number, cellHeight: number, boxThickness: number): GhosttySpriteBitmap | null;
     static load(wasmPath?: string): Promise<Ghostty>;
     private static loadFromPath;
 }
@@ -264,6 +278,14 @@ export declare interface GhosttyCell {
     width: number;
     hyperlink_id: number;
     grapheme_len: number;
+}
+
+export declare interface GhosttySpriteBitmap {
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
+    pixels: Uint8Array;
 }
 
 /**
@@ -455,6 +477,8 @@ declare interface GhosttyWasmExports extends WebAssembly.Exports {
     ghostty_wasm_free_u8(ptr: number): void;
     ghostty_wasm_alloc_usize(): number;
     ghostty_wasm_free_usize(ptr: number): void;
+    ghostty_sprite_has_codepoint(codepoint: number): number;
+    ghostty_sprite_rasterize(codepoint: number, cellWidth: number, cellHeight: number, boxThickness: number, pixelsPtr: number, pixelsLen: number, bitmapPtr: number): number;
     ghostty_sgr_new(allocator: number, parserPtrPtr: number): number;
     ghostty_sgr_free(parser: number): void;
     ghostty_sgr_reset(parser: number): void;
@@ -1418,6 +1442,7 @@ export declare interface RendererOptions {
     cursorBlink?: boolean;
     theme?: ITheme;
     devicePixelRatio?: number;
+    ghostty?: Ghostty;
 }
 
 /**

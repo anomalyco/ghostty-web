@@ -371,6 +371,18 @@ export interface GhosttyWasmExports extends WebAssembly.Exports {
   ghostty_wasm_alloc_usize(): number;
   ghostty_wasm_free_usize(ptr: number): void;
 
+  // Built-in sprite face
+  ghostty_sprite_has_codepoint(codepoint: number): number;
+  ghostty_sprite_rasterize(
+    codepoint: number,
+    cellWidth: number,
+    cellHeight: number,
+    boxThickness: number,
+    pixelsPtr: number,
+    pixelsLen: number,
+    bitmapPtr: number
+  ): number;
+
   // SGR parser
   ghostty_sgr_new(allocator: number, parserPtrPtr: number): number;
   ghostty_sgr_free(parser: number): void;
@@ -550,6 +562,14 @@ export const GHOSTTY_CONFIG_SIZE = 80;
  * Opaque terminal pointer (WASM memory address)
  */
 export type TerminalHandle = number;
+
+export interface GhosttySpriteBitmap {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  pixels: Uint8Array;
+}
 
 /**
  * Cell structure matching ghostty_cell_t in C (16 bytes)

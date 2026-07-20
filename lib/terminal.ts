@@ -453,6 +453,7 @@ export class Terminal implements ITerminalCore {
         cursorStyle: this.options.cursorStyle,
         cursorBlink: this.options.cursorBlink,
         theme: this.options.theme,
+        ghostty: this.ghostty!,
       });
 
       // Size canvas to terminal dimensions (use renderer.resize for proper DPI scaling)

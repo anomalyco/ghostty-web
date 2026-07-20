@@ -2551,6 +2551,12 @@ describe('Options Proxy handleOptionChange', () => {
           height: 16,
           baseline: 11,
         };
+        renderer.deviceMetrics = {
+          width: 8,
+          height: 16,
+          baseline: 11,
+          ascent: 10.5,
+        };
       };
 
       resolveReady();
