@@ -542,6 +542,20 @@ describe('paste()', () => {
       ]);
       term.dispose();
     });
+
+    test('recovers color reporting after a delayed capability probe', async () => {
+      const term = await createIsolatedTerminal({ cols: 80, rows: 24, colorScheme: 'dark' });
+      if (!container) return;
+      term.open(container);
+      const received: string[] = [];
+      term.onData((data) => received.push(data));
+
+      term.write('\x1b[?2031$p');
+      term.setOption('colorScheme', 'light');
+
+      expect(received).toEqual(['\x1b[?2031;2$y', '\x1b[?997;1n', '\x1b[?997;2n']);
+      term.dispose();
+    });
   });
 });
 

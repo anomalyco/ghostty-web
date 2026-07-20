@@ -2536,7 +2536,7 @@ class wA {
       get activeVersion() {
         return "15.1";
       }
-    }, this.dataEmitter = new H(), this.resizeEmitter = new H(), this.bellEmitter = new H(), this.selectionChangeEmitter = new H(), this.keyEmitter = new H(), this.titleChangeEmitter = new H(), this.scrollEmitter = new H(), this.renderEmitter = new H(), this.cursorMoveEmitter = new H(), this.onData = this.dataEmitter.event, this.onResize = this.resizeEmitter.event, this.onBell = this.bellEmitter.event, this.onSelectionChange = this.selectionChangeEmitter.event, this.onKey = this.keyEmitter.event, this.onTitleChange = this.titleChangeEmitter.event, this.onScroll = this.scrollEmitter.event, this.onRender = this.renderEmitter.event, this.onCursorMove = this.cursorMoveEmitter.event, this.isOpen = !1, this.isDisposed = !1, this.writeQueue = [], this.fontLoadGeneration = 0, this.colorQueryBuffer = "", this.addons = [], this.currentTitle = "", this.viewportY = 0, this.targetViewportY = 0, this.lastCursorY = 0, this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.scrollbarDragStartViewportY = 0, this.scrollbarVisible = !1, this.scrollbarOpacity = 0, this.SCROLLBAR_HIDE_DELAY_MS = 1500, this.SCROLLBAR_FADE_DURATION_MS = 200, this.animateScroll = () => {
+    }, this.dataEmitter = new H(), this.resizeEmitter = new H(), this.bellEmitter = new H(), this.selectionChangeEmitter = new H(), this.keyEmitter = new H(), this.titleChangeEmitter = new H(), this.scrollEmitter = new H(), this.renderEmitter = new H(), this.cursorMoveEmitter = new H(), this.onData = this.dataEmitter.event, this.onResize = this.resizeEmitter.event, this.onBell = this.bellEmitter.event, this.onSelectionChange = this.selectionChangeEmitter.event, this.onKey = this.keyEmitter.event, this.onTitleChange = this.titleChangeEmitter.event, this.onScroll = this.scrollEmitter.event, this.onRender = this.renderEmitter.event, this.onCursorMove = this.cursorMoveEmitter.event, this.isOpen = !1, this.isDisposed = !1, this.writeQueue = [], this.fontLoadGeneration = 0, this.terminalQueryBuffer = "", this.addons = [], this.currentTitle = "", this.viewportY = 0, this.targetViewportY = 0, this.lastCursorY = 0, this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.scrollbarDragStartViewportY = 0, this.scrollbarVisible = !1, this.scrollbarOpacity = 0, this.SCROLLBAR_HIDE_DELAY_MS = 1500, this.SCROLLBAR_FADE_DURATION_MS = 200, this.animateScroll = () => {
       if (!this.wasmTerm || this.scrollAnimationStartTime === void 0)
         return;
       const B = this.options.smoothScrollDuration ?? 100, Q = this.targetViewportY - this.viewportY;
@@ -2860,7 +2860,7 @@ class wA {
    */
   writeInternal(A, g) {
     var B;
-    this.wasmTerm.write(A), this.processColorQueries(A), this.processTerminalResponses(), typeof A == "string" && A.includes("\x07") ? this.bellEmitter.fire() : A instanceof Uint8Array && A.includes(7) && this.bellEmitter.fire(), (B = this.linkDetector) == null || B.invalidateCache(), this.viewportY !== 0 && this.scrollToBottom(), typeof A == "string" && A.includes("\x1B]") && this.checkForTitleChange(A), g && requestAnimationFrame(g);
+    this.wasmTerm.write(A), this.processTerminalResponses(), this.processTerminalQueries(A), typeof A == "string" && A.includes("\x07") ? this.bellEmitter.fire() : A instanceof Uint8Array && A.includes(7) && this.bellEmitter.fire(), (B = this.linkDetector) == null || B.invalidateCache(), this.viewportY !== 0 && this.scrollToBottom(), typeof A == "string" && A.includes("\x1B]") && this.checkForTitleChange(A), g && requestAnimationFrame(g);
   }
   /**
    * Write data with newline
@@ -3308,18 +3308,26 @@ class wA {
         this.dataEmitter.fire(A);
       }
   }
-  processColorQueries(A) {
-    const g = this.colorQueryBuffer + (typeof A == "string" ? A : new TextDecoder().decode(A)), B = /(?:\x1b\]|\x9d)(10|11);\?(?:\x07|\x1b\\|\x9c)/g;
+  processTerminalQueries(A) {
+    const g = this.terminalQueryBuffer + (typeof A == "string" ? A : new TextDecoder().decode(A)), B = /(?:(?:\x1b\]|\x9d)(10|11);\?(?:\x07|\x1b\\|\x9c))|(?:(?:\x1b\[|\x9b)\?2031\$p)/g;
     let Q = 0, C = null;
     for (; (C = B.exec(g)) !== null; ) {
-      Q = B.lastIndex;
+      if (Q = B.lastIndex, !C[1]) {
+        this.wasmTerm.write("\x1B[?2031h"), this.dataEmitter.fire(this.options.colorScheme === "dark" ? "\x1B[?997;1n" : "\x1B[?997;2n");
+        continue;
+      }
       const i = this.wasmTerm.getColors(), o = C[1] === "10" ? i.foreground : i.background, s = (N) => N.toString(16).padStart(2, "0").repeat(2);
       this.dataEmitter.fire(
         `\x1B]${C[1]};rgb:${s(o.r)}/${s(o.g)}/${s(o.b)}\x1B\\`
       );
     }
-    const E = g.slice(Q), D = Math.max(E.lastIndexOf("\x1B]"), E.lastIndexOf(""));
-    this.colorQueryBuffer = D >= 0 && E.length - D <= 16 ? E.slice(D) : "", !this.colorQueryBuffer && E.endsWith("\x1B") && (this.colorQueryBuffer = "\x1B");
+    const E = g.slice(Q), D = Math.max(
+      E.lastIndexOf("\x1B]"),
+      E.lastIndexOf(""),
+      E.lastIndexOf("\x1B["),
+      E.lastIndexOf("")
+    );
+    this.terminalQueryBuffer = D >= 0 && E.length - D <= 16 ? E.slice(D) : "", !this.terminalQueryBuffer && E.endsWith("\x1B") && (this.terminalQueryBuffer = "\x1B");
   }
   /**
    * Check for title changes in written data (OSC sequences)
