@@ -99,7 +99,10 @@ export class CanvasRenderer {
   private cursorStyle: 'block' | 'underline' | 'bar';
   private cursorBlink: boolean;
   private theme: Required<ITheme>;
-  private devicePixelRatio: number;
+  private devicePixelRatio?: number;
+  private activeDevicePixelRatio: number = 0;
+  private canvasWidth: number = 0;
+  private canvasHeight: number = 0;
   private metrics: FontMetrics;
   private palette: string[];
 
@@ -152,7 +155,7 @@ export class CanvasRenderer {
     this.cursorStyle = options.cursorStyle ?? 'block';
     this.cursorBlink = options.cursorBlink ?? false;
     this.theme = { ...DEFAULT_THEME, ...options.theme };
-    this.devicePixelRatio = options.devicePixelRatio ?? window.devicePixelRatio ?? 1;
+    this.devicePixelRatio = options.devicePixelRatio;
 
     // Build color palette (16 ANSI colors)
     this.palette = [
@@ -278,17 +281,31 @@ export class CanvasRenderer {
   public resize(cols: number, rows: number): void {
     const cssWidth = cols * this.metrics.width;
     const cssHeight = rows * this.metrics.height;
+    const devicePixelRatio = this.getDevicePixelRatio();
+    const width = Math.round(cssWidth * devicePixelRatio);
+    const height = Math.round(cssHeight * devicePixelRatio);
+
+    this.activeDevicePixelRatio = devicePixelRatio;
+    this.canvasWidth = cssWidth;
+    this.canvasHeight = cssHeight;
 
     // Set CSS size (what user sees)
     this.canvas.style.width = `${cssWidth}px`;
     this.canvas.style.height = `${cssHeight}px`;
 
     // Set actual canvas size (scaled for DPI)
-    this.canvas.width = cssWidth * this.devicePixelRatio;
-    this.canvas.height = cssHeight * this.devicePixelRatio;
+    this.canvas.width = width;
+    this.canvas.height = height;
 
-    // Scale context to match DPI (setting canvas.width/height resets the context)
-    this.ctx.scale(this.devicePixelRatio, this.devicePixelRatio);
+    // Map the logical grid exactly onto the integer backing store.
+    this.ctx.setTransform(
+      cssWidth ? width / cssWidth : devicePixelRatio,
+      0,
+      0,
+      cssHeight ? height / cssHeight : devicePixelRatio,
+      0,
+      0
+    );
 
     // Set text rendering properties for crisp text
     this.ctx.textBaseline = 'alphabetic';
@@ -328,9 +345,11 @@ export class CanvasRenderer {
     }
 
     // Resize canvas if dimensions changed
+    const devicePixelRatio = this.getDevicePixelRatio();
     const needsResize =
-      this.canvas.width !== dims.cols * this.metrics.width * this.devicePixelRatio ||
-      this.canvas.height !== dims.rows * this.metrics.height * this.devicePixelRatio;
+      this.activeDevicePixelRatio !== devicePixelRatio ||
+      this.canvas.width !== Math.round(dims.cols * this.metrics.width * devicePixelRatio) ||
+      this.canvas.height !== Math.round(dims.rows * this.metrics.height * devicePixelRatio);
 
     if (needsResize) {
       this.resize(dims.cols, dims.rows);
@@ -904,8 +923,8 @@ export class CanvasRenderer {
     opacity: number = 1
   ): void {
     const ctx = this.ctx;
-    const canvasHeight = this.canvas.height / this.devicePixelRatio;
-    const canvasWidth = this.canvas.width / this.devicePixelRatio;
+    const canvasHeight = this.canvasHeight;
+    const canvasWidth = this.canvasWidth;
 
     // Scrollbar dimensions
     const scrollbarWidth = 8;
@@ -941,6 +960,10 @@ export class CanvasRenderer {
   }
   public getMetrics(): FontMetrics {
     return { ...this.metrics };
+  }
+
+  private getDevicePixelRatio(): number {
+    return this.devicePixelRatio ?? window.devicePixelRatio ?? 1;
   }
 
   /**

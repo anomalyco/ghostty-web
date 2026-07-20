@@ -6,7 +6,10 @@ export declare class CanvasRenderer {
     private cursorStyle;
     private cursorBlink;
     private theme;
-    private devicePixelRatio;
+    private devicePixelRatio?;
+    private activeDevicePixelRatio;
+    private canvasWidth;
+    private canvasHeight;
     private metrics;
     private palette;
     private cursorVisible;
@@ -94,6 +97,7 @@ export declare class CanvasRenderer {
      */
     private renderScrollbar;
     getMetrics(): FontMetrics;
+    private getDevicePixelRatio;
     /**
      * Get canvas element (needed by SelectionManager)
      */

@@ -6,7 +6,7 @@
  * Full visual tests are in examples/renderer-demo.html
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { CanvasRenderer, DEFAULT_THEME } from './renderer';
 
 describe('CanvasRenderer', () => {
@@ -185,6 +185,61 @@ describe('CanvasRenderer', () => {
       } finally {
         HTMLCanvasElement.prototype.getContext = originalGetContext;
       }
+    });
+  });
+
+  describe('Device Pixel Ratio', () => {
+    test('resizes and redraws the backing store when browser DPR changes', () => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 1 });
+
+      try {
+        const canvas = document.createElement('canvas');
+        const renderer = new CanvasRenderer(canvas);
+        const buffer = {
+          getLine: () => null,
+          getCursor: () => ({ x: 0, y: 0, visible: false }),
+          getDimensions: () => ({ cols: 3, rows: 2 }),
+          isRowDirty: () => false,
+          clearDirty: () => {},
+        };
+
+        renderer.resize(3, 2);
+        expect(canvas.width).toBe(24);
+        expect(canvas.height).toBe(30);
+
+        Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 1.25 });
+        renderer.render(buffer);
+
+        expect(canvas.width).toBe(30);
+        expect(canvas.height).toBe(38);
+        expect(canvas.style.width).toBe('24px');
+        expect(canvas.style.height).toBe('30px');
+      } finally {
+        if (descriptor) Object.defineProperty(window, 'devicePixelRatio', descriptor);
+        else (window as { devicePixelRatio?: number }).devicePixelRatio = undefined;
+      }
+    });
+
+    test('compares rounded backing dimensions without resizing every frame', () => {
+      const renderer = new CanvasRenderer(document.createElement('canvas'), {
+        devicePixelRatio: 1.25,
+      });
+      const resize = spyOn(renderer, 'resize');
+      const buffer = {
+        getLine: () => null,
+        getCursor: () => ({ x: 0, y: 0, visible: false }),
+        getDimensions: () => ({ cols: 3, rows: 1 }),
+        isRowDirty: () => false,
+        clearDirty: () => {},
+      };
+
+      renderer.resize(3, 1);
+      resize.mockClear();
+      renderer.render(buffer);
+      renderer.render(buffer);
+
+      expect(resize).not.toHaveBeenCalled();
     });
   });
 });
