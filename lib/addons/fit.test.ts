@@ -233,4 +233,31 @@ describe('Dimension Calculation', () => {
     // Expected: (720 - 15 scrollbar) / 8 = 88 cols, 384 / 16 = 24 rows
     expect(dims).toEqual({ cols: 88, rows: 24 });
   });
+
+  test('retries a fit requested while resizing', async () => {
+    const mockElement = document.createElement('div');
+    let width = 900;
+    Object.defineProperty(mockElement, 'clientWidth', { get: () => width });
+    Object.defineProperty(mockElement, 'clientHeight', { value: 480 });
+    const mockTerminal = {
+      cols: 80,
+      rows: 24,
+      element: mockElement,
+      renderer: {
+        getMetrics: () => ({ width: 9, height: 16, baseline: 12 }),
+      },
+      resize: (cols: number, rows: number) => {
+        mockTerminal.cols = cols;
+        mockTerminal.rows = rows;
+      },
+    };
+
+    addon.activate(mockTerminal as any);
+    addon.fit();
+    width = 720;
+    addon.fit();
+    await Bun.sleep(60);
+
+    expect(mockTerminal.cols).toBe(78);
+  });
 });

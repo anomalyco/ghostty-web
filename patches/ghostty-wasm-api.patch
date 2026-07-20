@@ -1,15 +1,65 @@
+diff --git a/src/build/GhosttyZig.zig b/src/build/GhosttyZig.zig
+index 44c300e15..e447079d4 100644
+--- a/src/build/GhosttyZig.zig
++++ b/src/build/GhosttyZig.zig
+@@ -137,6 +137,11 @@ fn initVt(
+     // We need uucode for grapheme break support
+     deps.addUucode(b, vt, cfg.target, cfg.optimize);
+ 
++    if (b.lazyDependency("z2d", .{
++        .target = cfg.target,
++        .optimize = cfg.optimize,
++    })) |dep| vt.addImport("z2d", dep.module("z2d"));
++
+     // If SIMD is enabled, add all our SIMD dependencies.
+     if (cfg.simd) {
+         try SharedDeps.addSimd(b, vt, simd_libs);
+diff --git a/src/font/main.zig b/src/font/main.zig
+index 0c218bbda..b8b974ed3 100644
+--- a/src/font/main.zig
++++ b/src/font/main.zig
+@@ -32,7 +32,7 @@ pub const Library = library.Library;
+ 
+ // If we're targeting wasm then we export some wasm APIs.
+ comptime {
+-    if (builtin.target.cpu.arch.isWasm()) {
++    if (builtin.target.cpu.arch.isWasm() and !@hasDecl(@import("root"), "ghostty_lib_vt_sprite_only")) {
+         _ = Atlas.Wasm;
+         _ = DeferredFace.Wasm;
+         _ = face.web_canvas.Wasm;
+diff --git a/src/font/sprite/Face.zig b/src/font/sprite/Face.zig
+index f5df2d421..846583040 100644
+--- a/src/font/sprite/Face.zig
++++ b/src/font/sprite/Face.zig
+@@ -15,7 +15,6 @@ const Face = @This();
+ const std = @import("std");
+ const assert = @import("../../quirks.zig").inlineAssert;
+ const Allocator = std.mem.Allocator;
+-const wuffs = @import("wuffs");
+ const z2d = @import("z2d");
+ const font = @import("../main.zig");
+ const Sprite = font.sprite.Sprite;
+@@ -242,6 +241,7 @@ fn testDiffAtlas(
+ ) !bool {
+     // Get the file contents, we compare the PNG data first in
+     // order to ensure that no one smuggles arbitrary binary
++    const wuffs = @import("wuffs");
+     // data in to the reference PNGs.
+     const test_file = try std.fs.openFileAbsolute(path, .{ .mode = .read_only });
+     defer test_file.close();
 diff --git a/src/lib_vt.zig b/src/lib_vt.zig
-index 6d4406e88..47877792f 100644
+index 6d4406e88..49d94d3be 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
-@@ -9,4 +9,5 @@
+@@ -8,6 +8,7 @@
+ //! types, etc.) may change without warning. We're working on stabilizing
  //! this in the future.
  const lib = @This();
--
 +pub const ghostty_lib_vt_sprite_only = {};
-+
+ 
  const std = @import("std");
-@@ -212,7 +212,7 @@ comptime {
+ const builtin = @import("builtin");
+@@ -212,7 +213,7 @@ comptime {
          @export(&c.terminal_selection_format_buf, .{ .name = "ghostty_terminal_selection_format_buf" });
          @export(&c.terminal_selection_format_alloc, .{ .name = "ghostty_terminal_selection_format_alloc" });
          @export(&c.render_state_new, .{ .name = "ghostty_render_state_new" });
@@ -18,7 +68,7 @@ index 6d4406e88..47877792f 100644
          @export(&c.render_state_get, .{ .name = "ghostty_render_state_get" });
          @export(&c.render_state_get_multi, .{ .name = "ghostty_render_state_get_multi" });
          @export(&c.render_state_set, .{ .name = "ghostty_render_state_set" });
-@@ -230,10 +230,39 @@ comptime {
+@@ -230,10 +231,41 @@ comptime {
          @export(&c.render_state_row_cells_get_multi, .{ .name = "ghostty_render_state_row_cells_get_multi" });
          @export(&c.render_state_row_cells_free, .{ .name = "ghostty_render_state_row_cells_free" });
          @export(&c.render_state_free, .{ .name = "ghostty_render_state_free" });
@@ -29,6 +79,8 @@ index 6d4406e88..47877792f 100644
 +        @export(&c.web.free, .{ .name = "ghostty_terminal_free" });
 +        @export(&c.web.resize, .{ .name = "ghostty_terminal_resize" });
 +        @export(&c.web.write, .{ .name = "ghostty_terminal_write" });
++        @export(&c.web.setColorScheme, .{ .name = "ghostty_terminal_set_color_scheme" });
++        @export(&c.web.setConfig, .{ .name = "ghostty_terminal_set_config" });
 +        @export(&c.web.renderStateUpdate, .{ .name = "ghostty_render_state_update" });
 +        @export(&c.web.renderStateGetCols, .{ .name = "ghostty_render_state_get_cols" });
 +        @export(&c.web.renderStateGetRows, .{ .name = "ghostty_render_state_get_rows" });
@@ -61,7 +113,7 @@ index 6d4406e88..47877792f 100644
          @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
          @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
          @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
-@@ -289,6 +318,8 @@ comptime {
+@@ -289,6 +321,8 @@ comptime {
          @export(&c.tracked_grid_ref_point, .{ .name = "ghostty_tracked_grid_ref_point" });
          @export(&c.tracked_grid_ref_set, .{ .name = "ghostty_tracked_grid_ref_set" });
          @export(&c.tracked_grid_ref_snapshot, .{ .name = "ghostty_tracked_grid_ref_snapshot" });
@@ -70,68 +122,19 @@ index 6d4406e88..47877792f 100644
          @export(&c.build_info, .{ .name = "ghostty_build_info" });
          @export(&c.type_json, .{ .name = "ghostty_type_json" });
          @export(&c.alloc_alloc, .{ .name = "ghostty_alloc" });
-diff --git a/src/build/GhosttyZig.zig b/src/build/GhosttyZig.zig
-index d8bab3aef..fc4f19f09 100644
---- a/src/build/GhosttyZig.zig
-+++ b/src/build/GhosttyZig.zig
-@@ -137,6 +137,11 @@ fn initVt(
-     // We need uucode for grapheme break support
-     deps.addUucode(b, vt, cfg.target, cfg.optimize);
-
-+    if (b.lazyDependency("z2d", .{
-+        .target = cfg.target,
-+        .optimize = cfg.optimize,
-+    })) |dep| vt.addImport("z2d", dep.module("z2d"));
-+
-     // If SIMD is enabled, add all our SIMD dependencies.
-     if (cfg.simd) {
-         try SharedDeps.addSimd(b, vt, simd_libs);
-diff --git a/src/font/main.zig b/src/font/main.zig
-index 753599783..eb81fd5e0 100644
---- a/src/font/main.zig
-+++ b/src/font/main.zig
-@@ -32,7 +32,7 @@ pub const Library = library.Library;
-
- // If we're targeting wasm then we export some wasm APIs.
- comptime {
--    if (builtin.target.cpu.arch.isWasm()) {
-+    if (builtin.target.cpu.arch.isWasm() and !@hasDecl(@import("root"), "ghostty_lib_vt_sprite_only")) {
-         _ = Atlas.Wasm;
-         _ = DeferredFace.Wasm;
-         _ = face.web_canvas.Wasm;
-diff --git a/src/font/sprite/Face.zig b/src/font/sprite/Face.zig
-index bbd2044e1..ebd51fdde 100644
---- a/src/font/sprite/Face.zig
-+++ b/src/font/sprite/Face.zig
-@@ -15,7 +15,6 @@ const Face = @This();
- const std = @import("std");
- const assert = @import("../../quirks.zig").inlineAssert;
- const Allocator = std.mem.Allocator;
--const wuffs = @import("wuffs");
- const z2d = @import("z2d");
- const font = @import("../main.zig");
- const Sprite = font.sprite.Sprite;
-@@ -242,6 +241,7 @@ fn testDiffAtlas(
- ) !bool {
-     // Get the file contents, we compare the PNG data first in
-     // order to ensure that no one smuggles arbitrary binary
-+    const wuffs = @import("wuffs");
-     // data in to the reference PNGs.
-     const test_file = try std.fs.openFileAbsolute(path, .{ .mode = .read_only });
-     defer test_file.close();
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
-index 648bdbe51..1a81f26bc 100644
+index 648bdbe51..7e7d1b2f7 100644
 --- a/src/terminal/c/main.zig
 +++ b/src/terminal/c/main.zig
-@@ -43,6 +43,7 @@ pub const size_report = @import("size_report.zig");
+@@ -43,12 +43,14 @@ pub const size_report = @import("size_report.zig");
  pub const style = @import("style.zig");
  pub const sys = @import("sys.zig");
  pub const terminal = @import("terminal.zig");
 +pub const web = @import("web.zig");
-
+ 
  // The full C API, unexported.
  pub const build_info = buildpkg.get;
-@@ -50,5 +51,6 @@ pub const build_info = buildpkg.get;
+ 
  pub const osc_new = osc.new;
  pub const osc_free = osc.free;
 +pub const sprite_web = @import("sprite_web.zig");
@@ -140,7 +143,7 @@ index 648bdbe51..1a81f26bc 100644
  pub const osc_end = osc.end;
 diff --git a/src/terminal/c/sprite_web.zig b/src/terminal/c/sprite_web.zig
 new file mode 100644
-index 000000000..e3e963800
+index 000000000..87efc96ca
 --- /dev/null
 +++ b/src/terminal/c/sprite_web.zig
 @@ -0,0 +1,80 @@
@@ -226,10 +229,10 @@ index 000000000..e3e963800
 +}
 diff --git a/src/terminal/c/web.zig b/src/terminal/c/web.zig
 new file mode 100644
-index 000000000..65f90ce04
+index 000000000..874853d57
 --- /dev/null
 +++ b/src/terminal/c/web.zig
-@@ -0,0 +1,744 @@
+@@ -0,0 +1,776 @@
 +//! ghostty-web compatibility API for libghostty-vt.
 +
 +const std = @import("std");
@@ -241,6 +244,7 @@ index 000000000..65f90ce04
 +const render = @import("../render.zig");
 +const RenderState = render.RenderState;
 +const color = @import("../color.zig");
++const device_status = @import("../device_status.zig");
 +const modespkg = @import("../modes.zig");
 +const pagepkg = @import("../page.zig");
 +const Page = pagepkg.Page;
@@ -251,6 +255,7 @@ index 000000000..65f90ce04
 +    terminal: terminal_c.Terminal,
 +    render_state: RenderState = .empty,
 +    response_buffer: std.ArrayList(u8) = .empty,
++    color_scheme: ?device_status.ColorScheme = null,
 +    last_screen_is_alternate: bool = false,
 +};
 +
@@ -261,6 +266,12 @@ index 000000000..65f90ce04
 +fn responseCallback(_: terminal_c.Terminal, userdata: ?*anyopaque, data: [*]const u8, len: usize) callconv(lib.calling_conv) void {
 +    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(userdata orelse return));
 +    wrapper.response_buffer.appendSlice(wrapper.alloc, data[0..len]) catch {};
++}
++
++fn colorSchemeCallback(_: terminal_c.Terminal, userdata: ?*anyopaque, scheme: *device_status.ColorScheme) callconv(lib.calling_conv) bool {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(userdata orelse return false));
++    scheme.* = wrapper.color_scheme orelse return false;
++    return true;
 +}
 +
 +/// C-compatible cell structure (16 bytes)
@@ -331,20 +342,44 @@ index 000000000..65f90ce04
 +    }
 +
 +    const t = zigTerminal(wrapper);
-+    if (config) |cfg| {
-+        if (cfg.fg_color != 0) t.colors.foreground = color.DynamicRGB.init(colorFromInt(cfg.fg_color));
-+        if (cfg.bg_color != 0) t.colors.background = color.DynamicRGB.init(colorFromInt(cfg.bg_color));
-+        if (cfg.cursor_color != 0) t.colors.cursor = color.DynamicRGB.init(colorFromInt(cfg.cursor_color));
-+        for (cfg.palette, 0..) |value, i| {
-+            if (value != 0) t.colors.palette.current[i] = colorFromInt(value);
-+        }
-+    }
++    if (config) |cfg| applyConfig(wrapper, cfg);
 +    t.modes.set(.linefeed, false);
 +    t.modes.set(.grapheme_cluster, true);
 +
 +    _ = terminal_c.set(wrapper.terminal, .userdata, wrapper);
 +    _ = terminal_c.set(wrapper.terminal, .write_pty, @ptrCast(&responseCallback));
++    _ = terminal_c.set(wrapper.terminal, .color_scheme, @ptrCast(&colorSchemeCallback));
 +    return @ptrCast(wrapper);
++}
++
++pub fn setColorScheme(ptr: ?*anyopaque, scheme_raw: c_int) callconv(.c) void {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(ptr orelse return));
++    const scheme = std.meta.intToEnum(device_status.ColorScheme, scheme_raw) catch return;
++    if (wrapper.color_scheme == scheme) return;
++    wrapper.color_scheme = scheme;
++    if (!zigTerminal(wrapper).modes.get(.report_color_scheme)) return;
++    const response = switch (scheme) {
++        .dark => "\x1B[?997;1n",
++        .light => "\x1B[?997;2n",
++    };
++    wrapper.response_buffer.appendSlice(wrapper.alloc, response) catch {};
++}
++
++pub fn setConfig(ptr: ?*anyopaque, config: ?*const GhosttyTerminalConfig) callconv(.c) void {
++    const wrapper: *TerminalWrapper = @ptrCast(@alignCast(ptr orelse return));
++    applyConfig(wrapper, config orelse return);
++}
++
++fn applyConfig(wrapper: *TerminalWrapper, config: *const GhosttyTerminalConfig) void {
++    const t = zigTerminal(wrapper);
++    t.colors.foreground.default = colorFromInt(config.fg_color);
++    t.colors.background.default = colorFromInt(config.bg_color);
++    t.colors.cursor.default = colorFromInt(config.cursor_color);
++    var palette = t.colors.palette.original;
++    for (config.palette, 0..) |value, i| {
++        palette[i] = colorFromInt(value);
++    }
++    t.colors.palette.changeDefault(palette);
 +}
 +
 +fn colorFromInt(value: u32) color.RGB {

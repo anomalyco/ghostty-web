@@ -492,6 +492,56 @@ describe('paste()', () => {
       expect(() => term.paste('test')).toThrow();
       term.dispose();
     });
+
+    test('reports and follows the host color scheme', async () => {
+      const term = await createIsolatedTerminal({ cols: 80, rows: 24, colorScheme: 'dark' });
+      if (!container) return;
+      term.open(container);
+      const received: string[] = [];
+      term.onData((data) => received.push(data));
+
+      term.write('\x1b[?996n');
+      term.write('\x1b[?2031h');
+      term.setOption('theme', { background: '#fafafa' });
+      term.setOption('colorScheme', 'light');
+
+      expect(received).toEqual(['\x1b[?997;1n', '\x1b[?997;2n']);
+      term.dispose();
+    });
+
+    test('does not report unsolicited color scheme changes without mode 2031', async () => {
+      const term = await createIsolatedTerminal({ cols: 80, rows: 24, colorScheme: 'dark' });
+      if (!container) return;
+      term.open(container);
+      const received: string[] = [];
+      term.onData((data) => received.push(data));
+
+      term.setOption('colorScheme', 'light');
+
+      expect(received).toEqual([]);
+      term.dispose();
+    });
+
+    test('responds to OSC foreground and background queries', async () => {
+      const term = await createIsolatedTerminal({
+        cols: 80,
+        rows: 24,
+        theme: { foreground: '#101112', background: '#fafafa' },
+      });
+      if (!container) return;
+      term.open(container);
+      const received: string[] = [];
+      term.onData((data) => received.push(data));
+
+      term.write('\x1b]10;?\x1b\\\x1b]11;?');
+      term.write('\x07');
+
+      expect(received).toEqual([
+        '\x1b]10;rgb:1010/1111/1212\x1b\\',
+        '\x1b]11;rgb:fafa/fafa/fafa\x1b\\',
+      ]);
+      term.dispose();
+    });
   });
 });
 
@@ -1484,6 +1534,42 @@ describe('Terminal Config', () => {
       expect(firstCell.fg_r).toBe(255);
       expect(firstCell.fg_g).toBe(0);
       expect(firstCell.fg_b).toBe(0);
+    } finally {
+      term.dispose();
+    }
+  });
+
+  test('should update theme colors in the WASM terminal', async () => {
+    if (typeof document === 'undefined') return;
+    const term = await createIsolatedTerminal({ theme: { background: '#000080' } });
+    const container = document.createElement('div');
+    term.open(container);
+
+    try {
+      term.setOption('theme', { background: '#fafafa' });
+      const colors = term.wasmTerm!.getColors();
+      expect(colors.background).toEqual({ r: 250, g: 250, b: 250 });
+    } finally {
+      term.dispose();
+    }
+  });
+
+  test('should preserve OSC color overrides across theme updates', async () => {
+    if (typeof document === 'undefined') return;
+    const term = await createIsolatedTerminal({ theme: { background: '#000080', red: '#ff0000' } });
+    const container = document.createElement('div');
+    term.open(container);
+
+    try {
+      term.write('\x1b]11;#123456\x07\x1b]4;1;#654321\x07');
+      term.setOption('theme', { background: '#fafafa', red: '#abcdef' });
+      expect(term.wasmTerm!.getColors().background).toEqual({ r: 18, g: 52, b: 86 });
+      term.write('\x1b[41mX');
+      expect(term.wasmTerm!.getLine(0)[0].bg_r).toBe(101);
+
+      term.write('\x1b]111\x1b\\\x1b]104;1\x1b\\');
+      term.write('\x1b[41mY');
+      expect(term.wasmTerm!.getLine(0)[1].bg_r).toBe(171);
     } finally {
       term.dispose();
     }
