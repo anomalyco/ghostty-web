@@ -10,6 +10,7 @@
  * - Dirty line optimization for 60 FPS
  */
 
+import type { Ghostty } from './ghostty';
 import type { ITheme } from './interfaces';
 import type { SelectionManager } from './selection-manager';
 import type { GhosttyCell, ILink } from './types';
@@ -48,12 +49,23 @@ export interface RendererOptions {
   cursorBlink?: boolean; // Default: false
   theme?: ITheme;
   devicePixelRatio?: number; // Default: window.devicePixelRatio
+  ghostty?: Ghostty;
 }
 
 export interface FontMetrics {
   width: number; // Character cell width in CSS pixels
   height: number; // Character cell height in CSS pixels
   baseline: number; // Distance from top to text baseline
+}
+
+interface DeviceFontMetrics extends FontMetrics {
+  ascent: number;
+}
+
+interface CachedSprite {
+  canvas: HTMLCanvasElement;
+  offsetX: number;
+  offsetY: number;
 }
 
 // ============================================================================
@@ -99,9 +111,16 @@ export class CanvasRenderer {
   private cursorStyle: 'block' | 'underline' | 'bar';
   private cursorBlink: boolean;
   private theme: Required<ITheme>;
-  private devicePixelRatio: number;
+  private devicePixelRatio?: number;
+  private ghostty?: Ghostty;
+  private activeDevicePixelRatio: number = 0;
+  private metricsDevicePixelRatio: number;
+  private canvasWidth: number = 0;
+  private canvasHeight: number = 0;
   private metrics: FontMetrics;
+  private deviceMetrics: DeviceFontMetrics;
   private palette: string[];
+  private spriteCache = new Map<string, CachedSprite>();
 
   // Cursor blinking state
   private cursorVisible: boolean = true;
@@ -152,7 +171,8 @@ export class CanvasRenderer {
     this.cursorStyle = options.cursorStyle ?? 'block';
     this.cursorBlink = options.cursorBlink ?? false;
     this.theme = { ...DEFAULT_THEME, ...options.theme };
-    this.devicePixelRatio = options.devicePixelRatio ?? window.devicePixelRatio ?? 1;
+    this.devicePixelRatio = options.devicePixelRatio;
+    this.ghostty = options.ghostty;
 
     // Build color palette (16 ANSI colors)
     this.palette = [
@@ -174,8 +194,10 @@ export class CanvasRenderer {
       this.theme.brightWhite,
     ];
 
-    // Measure font metrics
-    this.metrics = this.measureFont();
+    // Measure on the same physical-pixel grid used by the backing canvas.
+    this.metricsDevicePixelRatio = this.getDevicePixelRatio();
+    this.deviceMetrics = this.measureFont(this.metricsDevicePixelRatio);
+    this.metrics = this.getCSSMetrics();
 
     // Setup cursor blinking if enabled
     if (this.cursorBlink) {
@@ -187,77 +209,56 @@ export class CanvasRenderer {
   // Font Metrics Measurement
   // ==========================================================================
 
-  private measureFont(): FontMetrics {
+  private measureFont(devicePixelRatio: number): DeviceFontMetrics {
     // Use an offscreen canvas for measurement
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
 
     // Set font (use actual pixel size for accurate measurement)
-    ctx.font = `${this.fontSize}px ${this.fontFamily}`;
+    ctx.font = `${this.fontSize * devicePixelRatio}px ${this.fontFamily}`;
 
-    // Measure width using 'M' (typically widest character)
+    // Ghostty rounds physical cell dimensions to nearest so the grid remains
+    // integral without inflating spacing across low and high DPI displays.
     const widthMetrics = ctx.measureText('M');
-    const width = Math.ceil(widthMetrics.width);
-
-    // Measure line height from visible terminal glyphs.
-    // Only trust Powerline separators when they resolve differently than the stack's normal
-    // fallback path, otherwise missing-glyph boxes can distort the row metrics.
-    const baseHeightMetrics = ctx.measureText('Mg');
-    const probeFamily = this.fontFamily
-      .split(',')
-      .map((family) => family.trim().replace(/^['"]|['"]$/g, ''))
-      .find((family) => /nerd|powerline/i.test(family));
-    let hasDistinctProbeMetrics = false;
-    let probeMetrics = baseHeightMetrics;
-
-    if (probeFamily) {
-      probeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
-
-      const families = this.fontFamily.split(',').map((family) => family.trim());
-      const fallbackFamily = ['"__ghostty_missing_font__"', ...families.slice(1)].join(', ');
-      ctx.font = `${this.fontSize}px ${fallbackFamily}`;
-      const fallbackProbeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
-      ctx.font = `${this.fontSize}px ${this.fontFamily}`;
-
-      hasDistinctProbeMetrics =
-        Math.abs(probeMetrics.width - fallbackProbeMetrics.width) > 0.01 ||
-        Math.abs(
-          (probeMetrics.actualBoundingBoxAscent ?? 0) -
-            (fallbackProbeMetrics.actualBoundingBoxAscent ?? 0)
-        ) > 0.01 ||
-        Math.abs(
-          (probeMetrics.actualBoundingBoxDescent ?? 0) -
-            (fallbackProbeMetrics.actualBoundingBoxDescent ?? 0)
-        ) > 0.01;
-    }
-
-    const heightMetrics = hasDistinctProbeMetrics ? probeMetrics : baseHeightMetrics;
+    const width = Math.max(1, Math.round(widthMetrics.width));
+    const heightMetrics = ctx.measureText('Mg');
     const ascent =
-      heightMetrics.actualBoundingBoxAscent ||
       heightMetrics.fontBoundingBoxAscent ||
-      baseHeightMetrics.actualBoundingBoxAscent ||
+      heightMetrics.actualBoundingBoxAscent ||
       widthMetrics.actualBoundingBoxAscent ||
-      this.fontSize * 0.8;
+      this.fontSize * devicePixelRatio * 0.8;
     const descent =
-      heightMetrics.actualBoundingBoxDescent ||
       heightMetrics.fontBoundingBoxDescent ||
-      baseHeightMetrics.actualBoundingBoxDescent ||
+      heightMetrics.actualBoundingBoxDescent ||
       widthMetrics.actualBoundingBoxDescent ||
-      this.fontSize * 0.2;
+      this.fontSize * devicePixelRatio * 0.2;
+    const faceHeight = ascent + descent;
+    const height = Math.max(1, Math.round(faceHeight));
+    const baseline = Math.round(ascent + (height - faceHeight) / 2);
 
-    const ascentPx = Math.ceil(ascent);
-    const descentPx = Math.ceil(descent);
-    const height = ascentPx + descentPx;
-    const baseline = ascentPx;
+    return { width, height, baseline, ascent };
+  }
 
-    return { width, height, baseline };
+  private updateFontMetrics(devicePixelRatio: number): void {
+    this.metricsDevicePixelRatio = devicePixelRatio;
+    this.deviceMetrics = this.measureFont(devicePixelRatio);
+    this.metrics = this.getCSSMetrics();
+    this.spriteCache.clear();
+  }
+
+  private getCSSMetrics(): FontMetrics {
+    return {
+      width: this.deviceMetrics.width / this.metricsDevicePixelRatio,
+      height: this.deviceMetrics.height / this.metricsDevicePixelRatio,
+      baseline: this.deviceMetrics.baseline / this.metricsDevicePixelRatio,
+    };
   }
 
   /**
    * Remeasure font metrics (call after font loads or changes)
    */
   public remeasureFont(): void {
-    this.metrics = this.measureFont();
+    this.updateFontMetrics(this.getDevicePixelRatio());
   }
 
   // ==========================================================================
@@ -276,27 +277,37 @@ export class CanvasRenderer {
    * Resize canvas to fit terminal dimensions
    */
   public resize(cols: number, rows: number): void {
-    const cssWidth = cols * this.metrics.width;
-    const cssHeight = rows * this.metrics.height;
+    const devicePixelRatio = this.getDevicePixelRatio();
+    if (this.metricsDevicePixelRatio !== devicePixelRatio) {
+      this.updateFontMetrics(devicePixelRatio);
+    }
+
+    const width = cols * this.deviceMetrics.width;
+    const height = rows * this.deviceMetrics.height;
+    const cssWidth = width / devicePixelRatio;
+    const cssHeight = height / devicePixelRatio;
+
+    this.activeDevicePixelRatio = devicePixelRatio;
+    this.canvasWidth = cssWidth;
+    this.canvasHeight = cssHeight;
 
     // Set CSS size (what user sees)
     this.canvas.style.width = `${cssWidth}px`;
     this.canvas.style.height = `${cssHeight}px`;
 
     // Set actual canvas size (scaled for DPI)
-    this.canvas.width = cssWidth * this.devicePixelRatio;
-    this.canvas.height = cssHeight * this.devicePixelRatio;
+    this.canvas.width = width;
+    this.canvas.height = height;
 
-    // Scale context to match DPI (setting canvas.width/height resets the context)
-    this.ctx.scale(this.devicePixelRatio, this.devicePixelRatio);
+    // Fill the backing store in physical pixels before restoring CSS coordinates.
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.fillStyle = this.theme.background;
+    this.ctx.fillRect(0, 0, width, height);
+    this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
     // Set text rendering properties for crisp text
     this.ctx.textBaseline = 'alphabetic';
     this.ctx.textAlign = 'left';
-
-    // Fill background after resize
-    this.ctx.fillStyle = this.theme.background;
-    this.ctx.fillRect(0, 0, cssWidth, cssHeight);
   }
 
   // ==========================================================================
@@ -328,9 +339,11 @@ export class CanvasRenderer {
     }
 
     // Resize canvas if dimensions changed
+    const devicePixelRatio = this.getDevicePixelRatio();
     const needsResize =
-      this.canvas.width !== dims.cols * this.metrics.width * this.devicePixelRatio ||
-      this.canvas.height !== dims.rows * this.metrics.height * this.devicePixelRatio;
+      this.activeDevicePixelRatio !== devicePixelRatio ||
+      this.canvas.width !== dims.cols * this.deviceMetrics.width ||
+      this.canvas.height !== dims.rows * this.deviceMetrics.height;
 
     if (needsResize) {
       this.resize(dims.cols, dims.rows);
@@ -556,26 +569,25 @@ export class CanvasRenderer {
    * cover any left-extending portions of graphemes from cell N-1.
    */
   private renderLine(line: GhosttyCell[], y: number, cols: number): void {
-    const lineY = y * this.metrics.height;
-    const lineWidth = cols * this.metrics.width;
+    const lineY = y * this.deviceMetrics.height;
+    const lineWidth = cols * this.deviceMetrics.width;
 
     // Clear line background then fill with theme color.
     // We clear just the cell area - glyph overflow is handled by also
     // redrawing adjacent rows (see render() method).
     // clearRect is needed because fillRect composites rather than replaces,
     // so transparent/translucent backgrounds wouldn't clear previous content.
-    this.ctx.clearRect(0, lineY, lineWidth, this.metrics.height);
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, lineY, lineWidth, this.deviceMetrics.height);
     this.ctx.fillStyle = this.theme.background;
-    this.ctx.fillRect(0, lineY, lineWidth, this.metrics.height);
+    this.ctx.fillRect(0, lineY, lineWidth, this.deviceMetrics.height);
+    this.ctx.restore();
 
     // PASS 1: Draw all cell backgrounds first
     // This ensures all backgrounds are painted before any text, allowing text
     // to "bleed" across cell boundaries without being covered by adjacent backgrounds
-    for (let x = 0; x < line.length; x++) {
-      const cell = line[x];
-      if (cell.width === 0) continue; // Skip spacer cells for wide characters
-      this.renderCellBackground(cell, x, y);
-    }
+    this.renderCellBackgrounds(line, y);
 
     // PASS 2: Draw all cell text and decorations
     // Now text can safely extend beyond cell boundaries (for complex scripts)
@@ -591,22 +603,50 @@ export class CanvasRenderer {
    * Selection highlighting is integrated here to avoid z-order issues with
    * complex glyphs (like Devanagari) that extend outside their cell bounds.
    */
-  private renderCellBackground(cell: GhosttyCell, x: number, y: number): void {
-    const cellX = x * this.metrics.width;
-    const cellY = y * this.metrics.height;
-    const cellWidth = this.metrics.width * cell.width;
+  private renderCellBackgrounds(line: GhosttyCell[], y: number): void {
+    const top = y * this.deviceMetrics.height;
+    let runColor: string | undefined;
+    let runStart = 0;
+    let runEnd = 0;
 
-    // Check if this cell is selected
-    const isSelected = this.isInSelection(x, y);
+    const flush = () => {
+      if (!runColor) return;
+      this.ctx.fillStyle = runColor;
+      this.ctx.fillRect(
+        runStart * this.deviceMetrics.width,
+        top,
+        (runEnd - runStart) * this.deviceMetrics.width,
+        this.deviceMetrics.height
+      );
+    };
 
-    if (isSelected) {
-      // Draw selection background (solid color, not overlay)
-      this.ctx.fillStyle = this.theme.selectionBackground;
-      this.ctx.fillRect(cellX, cellY, cellWidth, this.metrics.height);
-      return; // Selection background replaces cell background
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    for (let x = 0; x < line.length; x++) {
+      const cell = line[x];
+      if (cell.width === 0) continue;
+      const color = this.getCellBackground(cell, x, y);
+      const end = x + cell.width;
+
+      if (color === runColor && x === runEnd) {
+        runEnd = end;
+        continue;
+      }
+
+      flush();
+      runColor = color;
+      runStart = x;
+      runEnd = end;
     }
 
-    // Extract background color and handle inverse
+    flush();
+    this.ctx.restore();
+  }
+
+  private getCellBackground(cell: GhosttyCell, x: number, y: number): string | undefined {
+    if (this.isInSelection(x, y)) return this.theme.selectionBackground;
+
     let bg_r = cell.bg_r,
       bg_g = cell.bg_g,
       bg_b = cell.bg_b;
@@ -618,13 +658,9 @@ export class CanvasRenderer {
       bg_b = cell.fg_b;
     }
 
-    // Only draw cell background if it's different from the default (black)
-    // This lets the theme background (drawn earlier) show through for default cells
-    const isDefaultBg = bg_r === 0 && bg_g === 0 && bg_b === 0;
-    if (!isDefaultBg) {
-      this.ctx.fillStyle = this.rgbToCSS(bg_r, bg_g, bg_b);
-      this.ctx.fillRect(cellX, cellY, cellWidth, this.metrics.height);
-    }
+    // The theme background drawn for the full line shows through for default cells.
+    if (bg_r === 0 && bg_g === 0 && bg_b === 0) return;
+    return this.rgbToCSS(bg_r, bg_g, bg_b);
   }
 
   /**
@@ -651,25 +687,8 @@ export class CanvasRenderer {
     this.ctx.font = `${fontStyle}${this.fontSize}px ${this.fontFamily}`;
 
     // Set text color - use override, selection foreground, or normal color
-    if (colorOverride) {
-      this.ctx.fillStyle = colorOverride;
-    } else if (isSelected) {
-      this.ctx.fillStyle = this.theme.selectionForeground;
-    } else {
-      // Extract colors and handle inverse
-      let fg_r = cell.fg_r,
-        fg_g = cell.fg_g,
-        fg_b = cell.fg_b;
-
-      if (cell.flags & CellFlags.INVERSE) {
-        // When inverted, foreground becomes background
-        fg_r = cell.bg_r;
-        fg_g = cell.bg_g;
-        fg_b = cell.bg_b;
-      }
-
-      this.ctx.fillStyle = this.rgbToCSS(fg_r, fg_g, fg_b);
-    }
+    const color = this.getCellForeground(cell, isSelected, colorOverride);
+    this.ctx.fillStyle = color;
 
     // Apply faint effect
     if (cell.flags & CellFlags.FAINT) {
@@ -689,7 +708,26 @@ export class CanvasRenderer {
       // Simple cell - single codepoint
       char = String.fromCodePoint(cell.codepoint || 32); // Default to space if null
     }
-    this.ctx.fillText(char, textX, textY);
+    const codepoints = Array.from(char);
+    const codepoint = codepoints.length === 1 ? codepoints[0].codePointAt(0) : undefined;
+    const sprite =
+      codepoint !== undefined && this.ghostty?.hasSpriteCodepoint(codepoint)
+        ? this.getSprite(codepoint, cell.width, color, cell.flags & CellFlags.FAINT ? 0.5 : 1)
+        : null;
+
+    if (sprite) {
+      this.ctx.globalAlpha = 1;
+      this.ctx.save();
+      this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      this.ctx.drawImage(
+        sprite.canvas,
+        x * this.deviceMetrics.width + sprite.offsetX,
+        y * this.deviceMetrics.height + this.deviceMetrics.height - sprite.offsetY
+      );
+      this.ctx.restore();
+    } else {
+      this.ctx.fillText(char, textX, textY);
+    }
 
     // Reset alpha
     if (cell.flags & CellFlags.FAINT) {
@@ -698,24 +736,12 @@ export class CanvasRenderer {
 
     // Draw underline
     if (cell.flags & CellFlags.UNDERLINE) {
-      const underlineY = cellY + this.metrics.baseline + 2;
-      this.ctx.strokeStyle = this.ctx.fillStyle;
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(cellX, underlineY);
-      this.ctx.lineTo(cellX + cellWidth, underlineY);
-      this.ctx.stroke();
+      this.fillDeviceDecoration(x, y, cell.width, false, color);
     }
 
     // Draw strikethrough
     if (cell.flags & CellFlags.STRIKETHROUGH) {
-      const strikeY = cellY + this.metrics.height / 2;
-      this.ctx.strokeStyle = this.ctx.fillStyle;
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(cellX, strikeY);
-      this.ctx.lineTo(cellX + cellWidth, strikeY);
-      this.ctx.stroke();
+      this.fillDeviceDecoration(x, y, cell.width, true, color);
     }
 
     // Draw hyperlink underline (for OSC8 hyperlinks)
@@ -724,13 +750,7 @@ export class CanvasRenderer {
 
       // Only show underline when hovered (cleaner look)
       if (isHovered) {
-        const underlineY = cellY + this.metrics.baseline + 2;
-        this.ctx.strokeStyle = '#4A90E2'; // Blue underline on hover
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.moveTo(cellX, underlineY);
-        this.ctx.lineTo(cellX + cellWidth, underlineY);
-        this.ctx.stroke();
+        this.fillDeviceDecoration(x, y, cell.width, false, '#4A90E2');
       }
     }
 
@@ -744,61 +764,149 @@ export class CanvasRenderer {
         (y === range.endY && x <= range.endX && (y > range.startY || x >= range.startX));
 
       if (isInRange) {
-        const underlineY = cellY + this.metrics.baseline + 2;
-        this.ctx.strokeStyle = '#4A90E2'; // Blue underline on hover
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.moveTo(cellX, underlineY);
-        this.ctx.lineTo(cellX + cellWidth, underlineY);
-        this.ctx.stroke();
+        this.fillDeviceDecoration(x, y, cell.width, false, '#4A90E2');
       }
     }
+  }
+
+  private fillDeviceDecoration(
+    x: number,
+    y: number,
+    cellWidth: number,
+    strikethrough: boolean,
+    color: string
+  ): void {
+    const thickness = Math.min(this.getDeviceThickness(), this.deviceMetrics.height);
+    const position = strikethrough
+      ? Math.round(
+          this.deviceMetrics.baseline -
+            (this.deviceMetrics.ascent * 0.75 * 0.75 + thickness) / 2
+        )
+      : Math.round(this.deviceMetrics.baseline + thickness);
+    const top = Math.min(Math.max(0, position), this.deviceMetrics.height - thickness);
+
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(
+      x * this.deviceMetrics.width,
+      y * this.deviceMetrics.height + top,
+      cellWidth * this.deviceMetrics.width,
+      thickness
+    );
+    this.ctx.restore();
+  }
+
+  private getCellForeground(
+    cell: GhosttyCell,
+    isSelected: boolean,
+    colorOverride?: string
+  ): string {
+    if (colorOverride) return colorOverride;
+    if (isSelected) return this.theme.selectionForeground;
+
+    if (cell.flags & CellFlags.INVERSE) {
+      return this.rgbToCSS(cell.bg_r, cell.bg_g, cell.bg_b);
+    }
+    return this.rgbToCSS(cell.fg_r, cell.fg_g, cell.fg_b);
+  }
+
+  private getSprite(
+    codepoint: number,
+    cellWidth: number,
+    color: string,
+    alpha: number
+  ): CachedSprite | null {
+    if (!this.ghostty) return null;
+
+    const width = this.deviceMetrics.width * cellWidth;
+    const height = this.deviceMetrics.height;
+    const thickness = this.getDeviceThickness();
+    const key = `${codepoint}:${width}:${height}:${thickness}:${color}:${alpha}`;
+    const cached = this.spriteCache.get(key);
+    if (cached) return cached;
+
+    const bitmap = this.ghostty.rasterizeSprite(codepoint, width, height, thickness);
+    if (!bitmap) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const image = ctx.createImageData(bitmap.width, bitmap.height);
+    for (let source = 0, target = 3; source < bitmap.pixels.length; source++, target += 4) {
+      image.data[target] = bitmap.pixels[source];
+    }
+    ctx.putImageData(image, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+
+    const result = { canvas, offsetX: bitmap.offsetX, offsetY: bitmap.offsetY };
+    this.spriteCache.set(key, result);
+    return result;
+  }
+
+  private getDeviceThickness(): number {
+    return Math.max(1, Math.ceil(this.deviceMetrics.ascent * 0.75 * 0.75 * 0.15));
   }
 
   /**
    * Render cursor
    */
   private renderCursor(x: number, y: number): void {
-    const cursorX = x * this.metrics.width;
-    const cursorY = y * this.metrics.height;
+    const cursorX = x * this.deviceMetrics.width;
+    const cursorY = y * this.deviceMetrics.height;
 
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.fillStyle = this.theme.cursor;
 
     switch (this.cursorStyle) {
       case 'block':
         // Full cell block
-        this.ctx.fillRect(cursorX, cursorY, this.metrics.width, this.metrics.height);
+        this.ctx.fillRect(cursorX, cursorY, this.deviceMetrics.width, this.deviceMetrics.height);
         // Re-draw character under cursor with cursorAccent color
         {
           const line = this.currentBuffer?.getLine(y);
           if (line?.[x]) {
-            this.ctx.save();
             this.ctx.beginPath();
-            this.ctx.rect(cursorX, cursorY, this.metrics.width, this.metrics.height);
+            this.ctx.rect(cursorX, cursorY, this.deviceMetrics.width, this.deviceMetrics.height);
             this.ctx.clip();
+            this.ctx.setTransform(
+              this.metricsDevicePixelRatio,
+              0,
+              0,
+              this.metricsDevicePixelRatio,
+              0,
+              0
+            );
             this.renderCellText(line[x], x, y, this.theme.cursorAccent);
-            this.ctx.restore();
           }
         }
         break;
 
       case 'underline':
         // Underline at bottom of cell
-        const underlineHeight = Math.max(2, Math.floor(this.metrics.height * 0.15));
+        const underlineHeight = Math.min(this.getDeviceThickness(), this.deviceMetrics.height);
         this.ctx.fillRect(
           cursorX,
-          cursorY + this.metrics.height - underlineHeight,
-          this.metrics.width,
+          cursorY + this.deviceMetrics.height - underlineHeight,
+          this.deviceMetrics.width,
           underlineHeight
         );
         break;
 
       case 'bar':
         // Vertical bar at left of cell
-        const barWidth = Math.max(2, Math.floor(this.metrics.width * 0.15));
-        this.ctx.fillRect(cursorX, cursorY, barWidth, this.metrics.height);
+        const barWidth = Math.min(this.getDeviceThickness(), this.deviceMetrics.width);
+        this.ctx.fillRect(cursorX, cursorY, barWidth, this.deviceMetrics.height);
         break;
     }
+    this.ctx.restore();
   }
 
   // ==========================================================================
@@ -830,6 +938,7 @@ export class CanvasRenderer {
    */
   public setTheme(theme: ITheme): void {
     this.theme = { ...DEFAULT_THEME, ...theme };
+    this.spriteCache.clear();
 
     // Rebuild palette
     this.palette = [
@@ -857,7 +966,7 @@ export class CanvasRenderer {
    */
   public setFontSize(size: number): void {
     this.fontSize = size;
-    this.metrics = this.measureFont();
+    this.updateFontMetrics(this.getDevicePixelRatio());
   }
 
   /**
@@ -865,7 +974,7 @@ export class CanvasRenderer {
    */
   public setFontFamily(family: string): void {
     this.fontFamily = family;
-    this.metrics = this.measureFont();
+    this.updateFontMetrics(this.getDevicePixelRatio());
   }
 
   /**
@@ -904,8 +1013,8 @@ export class CanvasRenderer {
     opacity: number = 1
   ): void {
     const ctx = this.ctx;
-    const canvasHeight = this.canvas.height / this.devicePixelRatio;
-    const canvasWidth = this.canvas.width / this.devicePixelRatio;
+    const canvasHeight = this.canvasHeight;
+    const canvasWidth = this.canvasWidth;
 
     // Scrollbar dimensions
     const scrollbarWidth = 8;
@@ -941,6 +1050,10 @@ export class CanvasRenderer {
   }
   public getMetrics(): FontMetrics {
     return { ...this.metrics };
+  }
+
+  private getDevicePixelRatio(): number {
+    return this.devicePixelRatio ?? window.devicePixelRatio ?? 1;
   }
 
   /**
@@ -1029,9 +1142,12 @@ export class CanvasRenderer {
   public clear(): void {
     // clearRect first because fillRect composites rather than replaces,
     // so transparent/translucent backgrounds wouldn't clear previous content.
+    this.ctx.save();
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.fillStyle = this.theme.background;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.restore();
   }
 
   /**

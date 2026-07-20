@@ -12,6 +12,7 @@ import {
   DirtyState,
   GHOSTTY_CONFIG_SIZE,
   type GhosttyCell,
+  type GhosttySpriteBitmap,
   type GhosttyTerminalConfig,
   type GhosttyWasmExports,
   KeyEncoderOption,
@@ -29,6 +30,7 @@ export {
   type Cursor,
   DirtyState,
   type GhosttyCell,
+  type GhosttySpriteBitmap,
   type GhosttyTerminalConfig,
   KeyEncoderOption,
   type RGB,
@@ -42,6 +44,7 @@ export {
 export class Ghostty {
   private exports: GhosttyWasmExports;
   private memory: WebAssembly.Memory;
+  private spriteCodepoints = new Map<number, boolean>();
 
   constructor(wasmInstance: WebAssembly.Instance) {
     this.exports = wasmInstance.exports as GhosttyWasmExports;
@@ -58,6 +61,57 @@ export class Ghostty {
     config?: GhosttyTerminalConfig
   ): GhosttyTerminal {
     return new GhosttyTerminal(this.exports, this.memory, cols, rows, config);
+  }
+
+  hasSpriteCodepoint(codepoint: number): boolean {
+    const cached = this.spriteCodepoints.get(codepoint);
+    if (cached !== undefined) return cached;
+    const result = this.exports.ghostty_sprite_has_codepoint(codepoint) !== 0;
+    this.spriteCodepoints.set(codepoint, result);
+    return result;
+  }
+
+  rasterizeSprite(
+    codepoint: number,
+    cellWidth: number,
+    cellHeight: number,
+    boxThickness: number
+  ): GhosttySpriteBitmap | null {
+    if (!this.hasSpriteCodepoint(codepoint)) return null;
+
+    const paddedWidth = cellWidth + 2 * Math.floor(cellWidth / 4);
+    const paddedHeight = cellHeight + 2 * Math.floor(cellHeight / 4);
+    const capacity = paddedWidth * paddedHeight;
+    const pixelsPtr = this.exports.ghostty_wasm_alloc_u8_array(capacity);
+    const bitmapPtr = this.exports.ghostty_wasm_alloc_u8_array(20);
+
+    try {
+      if (
+        !this.exports.ghostty_sprite_rasterize(
+          codepoint,
+          cellWidth,
+          cellHeight,
+          boxThickness,
+          pixelsPtr,
+          capacity,
+          bitmapPtr
+        )
+      ) {
+        return null;
+      }
+
+      const view = new DataView(this.memory.buffer, bitmapPtr, 20);
+      return {
+        width: view.getUint32(0, true),
+        height: view.getUint32(4, true),
+        offsetX: view.getInt32(8, true),
+        offsetY: view.getInt32(12, true),
+        pixels: new Uint8Array(this.memory.buffer, pixelsPtr, view.getUint32(16, true)).slice(),
+      };
+    } finally {
+      this.exports.ghostty_wasm_free_u8_array(bitmapPtr, 20);
+      this.exports.ghostty_wasm_free_u8_array(pixelsPtr, capacity);
+    }
   }
 
   static async load(wasmPath?: string): Promise<Ghostty> {

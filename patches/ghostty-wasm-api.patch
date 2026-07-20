@@ -2,6 +2,13 @@ diff --git a/src/lib_vt.zig b/src/lib_vt.zig
 index 6d4406e88..47877792f 100644
 --- a/src/lib_vt.zig
 +++ b/src/lib_vt.zig
+@@ -9,4 +9,5 @@
+ //! this in the future.
+ const lib = @This();
+-
++pub const ghostty_lib_vt_sprite_only = {};
++
+ const std = @import("std");
 @@ -212,7 +212,7 @@ comptime {
          @export(&c.terminal_selection_format_buf, .{ .name = "ghostty_terminal_selection_format_buf" });
          @export(&c.terminal_selection_format_alloc, .{ .name = "ghostty_terminal_selection_format_alloc" });
@@ -54,6 +61,64 @@ index 6d4406e88..47877792f 100644
          @export(&c.terminal_set, .{ .name = "ghostty_terminal_set" });
          @export(&c.terminal_vt_write, .{ .name = "ghostty_terminal_vt_write" });
          @export(&c.terminal_scroll_viewport, .{ .name = "ghostty_terminal_scroll_viewport" });
+@@ -289,6 +318,8 @@ comptime {
+         @export(&c.tracked_grid_ref_point, .{ .name = "ghostty_tracked_grid_ref_point" });
+         @export(&c.tracked_grid_ref_set, .{ .name = "ghostty_tracked_grid_ref_set" });
+         @export(&c.tracked_grid_ref_snapshot, .{ .name = "ghostty_tracked_grid_ref_snapshot" });
++        @export(&c.sprite_web.hasCodepoint, .{ .name = "ghostty_sprite_has_codepoint" });
++        @export(&c.sprite_web.rasterize, .{ .name = "ghostty_sprite_rasterize" });
+         @export(&c.build_info, .{ .name = "ghostty_build_info" });
+         @export(&c.type_json, .{ .name = "ghostty_type_json" });
+         @export(&c.alloc_alloc, .{ .name = "ghostty_alloc" });
+diff --git a/src/build/GhosttyZig.zig b/src/build/GhosttyZig.zig
+index d8bab3aef..fc4f19f09 100644
+--- a/src/build/GhosttyZig.zig
++++ b/src/build/GhosttyZig.zig
+@@ -137,6 +137,11 @@ fn initVt(
+     // We need uucode for grapheme break support
+     deps.addUucode(b, vt, cfg.target, cfg.optimize);
+
++    if (b.lazyDependency("z2d", .{
++        .target = cfg.target,
++        .optimize = cfg.optimize,
++    })) |dep| vt.addImport("z2d", dep.module("z2d"));
++
+     // If SIMD is enabled, add all our SIMD dependencies.
+     if (cfg.simd) {
+         try SharedDeps.addSimd(b, vt, simd_libs);
+diff --git a/src/font/main.zig b/src/font/main.zig
+index 753599783..eb81fd5e0 100644
+--- a/src/font/main.zig
++++ b/src/font/main.zig
+@@ -32,7 +32,7 @@ pub const Library = library.Library;
+
+ // If we're targeting wasm then we export some wasm APIs.
+ comptime {
+-    if (builtin.target.cpu.arch.isWasm()) {
++    if (builtin.target.cpu.arch.isWasm() and !@hasDecl(@import("root"), "ghostty_lib_vt_sprite_only")) {
+         _ = Atlas.Wasm;
+         _ = DeferredFace.Wasm;
+         _ = face.web_canvas.Wasm;
+diff --git a/src/font/sprite/Face.zig b/src/font/sprite/Face.zig
+index bbd2044e1..ebd51fdde 100644
+--- a/src/font/sprite/Face.zig
++++ b/src/font/sprite/Face.zig
+@@ -15,7 +15,6 @@ const Face = @This();
+ const std = @import("std");
+ const assert = @import("../../quirks.zig").inlineAssert;
+ const Allocator = std.mem.Allocator;
+-const wuffs = @import("wuffs");
+ const z2d = @import("z2d");
+ const font = @import("../main.zig");
+ const Sprite = font.sprite.Sprite;
+@@ -242,6 +241,7 @@ fn testDiffAtlas(
+ ) !bool {
+     // Get the file contents, we compare the PNG data first in
+     // order to ensure that no one smuggles arbitrary binary
++    const wuffs = @import("wuffs");
+     // data in to the reference PNGs.
+     const test_file = try std.fs.openFileAbsolute(path, .{ .mode = .read_only });
+     defer test_file.close();
 diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
 index 648bdbe51..1a81f26bc 100644
 --- a/src/terminal/c/main.zig
@@ -63,9 +128,102 @@ index 648bdbe51..1a81f26bc 100644
  pub const sys = @import("sys.zig");
  pub const terminal = @import("terminal.zig");
 +pub const web = @import("web.zig");
- 
+
  // The full C API, unexported.
  pub const build_info = buildpkg.get;
+@@ -50,5 +51,6 @@ pub const build_info = buildpkg.get;
+ pub const osc_new = osc.new;
+ pub const osc_free = osc.free;
++pub const sprite_web = @import("sprite_web.zig");
+ pub const osc_reset = osc.reset;
+ pub const osc_next = osc.next;
+ pub const osc_end = osc.end;
+diff --git a/src/terminal/c/sprite_web.zig b/src/terminal/c/sprite_web.zig
+new file mode 100644
+index 000000000..e3e963800
+--- /dev/null
++++ b/src/terminal/c/sprite_web.zig
+@@ -0,0 +1,80 @@
++const std = @import("std");
++const builtin = @import("builtin");
++const font = @import("../../font/main.zig");
++const SpriteFace = font.sprite.Face;
++
++pub const Bitmap = extern struct {
++    width: u32,
++    height: u32,
++    offset_x: i32,
++    offset_y: i32,
++    len: u32,
++};
++
++pub fn hasCodepoint(cp: u32) callconv(.c) bool {
++    const face: SpriteFace = .{ .metrics = undefined };
++    return face.hasCodepoint(cp, null);
++}
++
++pub fn rasterize(
++    cp: u32,
++    cell_width: u32,
++    cell_height: u32,
++    box_thickness: u32,
++    out: [*]u8,
++    out_len: usize,
++    result: *Bitmap,
++) callconv(.c) bool {
++    if (cell_width == 0 or cell_height == 0 or box_thickness == 0) return false;
++
++    const metrics: font.Metrics = .{
++        .cell_width = cell_width,
++        .cell_height = cell_height,
++        .cell_baseline = cell_height / 4,
++        .underline_position = cell_height -| box_thickness,
++        .underline_thickness = box_thickness,
++        .strikethrough_position = cell_height / 2,
++        .strikethrough_thickness = box_thickness,
++        .overline_position = 0,
++        .overline_thickness = box_thickness,
++        .box_thickness = box_thickness,
++        .cursor_thickness = box_thickness,
++        .cursor_height = cell_height,
++        .icon_height = @floatFromInt(cell_height),
++        .icon_height_single = @floatFromInt(cell_height),
++        .face_width = @floatFromInt(cell_width),
++        .face_height = @floatFromInt(cell_height),
++        .face_y = 0,
++    };
++    const face: SpriteFace = .{ .metrics = metrics };
++    if (!face.hasCodepoint(cp, null)) return false;
++
++    const alloc = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.c_allocator;
++    const padded_width = cell_width + 2 * (cell_width / 4);
++    const padded_height = cell_height + 2 * (cell_height / 4);
++    var atlas = font.Atlas.init(alloc, @max(padded_width, padded_height) + 2, .grayscale) catch return false;
++    defer atlas.deinit(alloc);
++
++    const glyph = face.renderGlyph(alloc, &atlas, cp, .{ .grid_metrics = metrics }) catch return false;
++    const len: usize = @as(usize, cell_width) * cell_height;
++    if (out_len < len) return false;
++    @memset(out[0..len], 0);
++    for (0..glyph.height) |y| {
++        for (0..glyph.width) |x| {
++            const dst_x = glyph.offset_x + @as(i32, @intCast(x));
++            const dst_y = @as(i32, @intCast(cell_height)) - glyph.offset_y + @as(i32, @intCast(y));
++            if (dst_x < 0 or dst_y < 0 or dst_x >= cell_width or dst_y >= cell_height) continue;
++            const src = @as(usize, glyph.atlas_y + @as(u32, @intCast(y))) * atlas.size + glyph.atlas_x + x;
++            const dst = @as(usize, @intCast(dst_y)) * cell_width + @as(usize, @intCast(dst_x));
++            out[dst] = atlas.data[src];
++        }
++    }
++    result.* = .{
++        .width = cell_width,
++        .height = cell_height,
++        .offset_x = 0,
++        .offset_y = @intCast(cell_height),
++        .len = @intCast(len),
++    };
++    return true;
++}
 diff --git a/src/terminal/c/web.zig b/src/terminal/c/web.zig
 new file mode 100644
 index 000000000..65f90ce04

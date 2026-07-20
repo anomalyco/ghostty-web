@@ -80,7 +80,14 @@ export {
   KeyEncoderOption,
 } from './ghostty';
 export { Key, KeyAction, Mods } from './types';
-export type { KeyEvent, GhosttyCell, RGB, Cursor, TerminalHandle } from './types';
+export type {
+  KeyEvent,
+  GhosttyCell,
+  GhosttySpriteBitmap,
+  RGB,
+  Cursor,
+  TerminalHandle,
+} from './types';
 
 // Low-level components (for custom integrations)
 export { CanvasRenderer } from './renderer';
