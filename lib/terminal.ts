@@ -213,8 +213,10 @@ export class Terminal implements ITerminalCore {
         break;
 
       case 'colorScheme':
+        const reporting = this.wasmTerm?.getMode(2031) === true;
         this.wasmTerm?.setColorScheme(this.options.colorScheme);
         this.processTerminalResponses();
+        if (reporting) this.reportColors();
         break;
 
       case 'fontSize':
@@ -1903,6 +1905,7 @@ export class Terminal implements ITerminalCore {
         // Enabling the queried mode and reporting once makes delayed attachment recover.
         this.wasmTerm!.write('\x1b[?2031h');
         this.dataEmitter.fire(this.options.colorScheme === 'dark' ? '\x1b[?997;1n' : '\x1b[?997;2n');
+        this.reportColors();
         continue;
       }
       const colors = this.wasmTerm!.getColors();
@@ -1922,6 +1925,17 @@ export class Terminal implements ITerminalCore {
     );
     this.terminalQueryBuffer = start >= 0 && tail.length - start <= 16 ? tail.slice(start) : '';
     if (!this.terminalQueryBuffer && tail.endsWith('\x1b')) this.terminalQueryBuffer = '\x1b';
+  }
+
+  private reportColors(): void {
+    const colors = this.wasmTerm!.getColors();
+    const component = (value: number) => value.toString(16).padStart(2, '0').repeat(2);
+    this.dataEmitter.fire(
+      `\x1b]10;rgb:${component(colors.foreground.r)}/${component(colors.foreground.g)}/${component(colors.foreground.b)}\x1b\\`
+    );
+    this.dataEmitter.fire(
+      `\x1b]11;rgb:${component(colors.background.r)}/${component(colors.background.g)}/${component(colors.background.b)}\x1b\\`
+    );
   }
 
   /**

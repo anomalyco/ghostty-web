@@ -2658,7 +2658,7 @@ class wA {
    * This enables xterm.js compatibility where options can be changed at runtime
    */
   handleOptionChange(A, g, B) {
-    var Q, C;
+    var Q, C, E;
     if (g !== B)
       switch (A) {
         case "disableStdin":
@@ -2670,12 +2670,13 @@ class wA {
         case "theme":
           if (this.renderer) {
             this.renderer.setTheme(this.options.theme);
-            const E = this.buildWasmConfig();
-            E && ((Q = this.wasmTerm) == null || Q.setConfig(E)), this.wasmTerm && this.renderer.render(this.wasmTerm, !0, this.viewportY, this);
+            const i = this.buildWasmConfig();
+            i && ((Q = this.wasmTerm) == null || Q.setConfig(i)), this.wasmTerm && this.renderer.render(this.wasmTerm, !0, this.viewportY, this);
           }
           break;
         case "colorScheme":
-          (C = this.wasmTerm) == null || C.setColorScheme(this.options.colorScheme), this.processTerminalResponses();
+          const D = ((C = this.wasmTerm) == null ? void 0 : C.getMode(2031)) === !0;
+          (E = this.wasmTerm) == null || E.setColorScheme(this.options.colorScheme), this.processTerminalResponses(), D && this.reportColors();
           break;
         case "fontSize":
           this.renderer && (this.renderer.setFontSize(this.options.fontSize), this.handleFontChange());
@@ -3313,7 +3314,7 @@ class wA {
     let Q = 0, C = null;
     for (; (C = B.exec(g)) !== null; ) {
       if (Q = B.lastIndex, !C[1]) {
-        this.wasmTerm.write("\x1B[?2031h"), this.dataEmitter.fire(this.options.colorScheme === "dark" ? "\x1B[?997;1n" : "\x1B[?997;2n");
+        this.wasmTerm.write("\x1B[?2031h"), this.dataEmitter.fire(this.options.colorScheme === "dark" ? "\x1B[?997;1n" : "\x1B[?997;2n"), this.reportColors();
         continue;
       }
       const i = this.wasmTerm.getColors(), o = C[1] === "10" ? i.foreground : i.background, s = (N) => N.toString(16).padStart(2, "0").repeat(2);
@@ -3328,6 +3329,14 @@ class wA {
       E.lastIndexOf("")
     );
     this.terminalQueryBuffer = D >= 0 && E.length - D <= 16 ? E.slice(D) : "", !this.terminalQueryBuffer && E.endsWith("\x1B") && (this.terminalQueryBuffer = "\x1B");
+  }
+  reportColors() {
+    const A = this.wasmTerm.getColors(), g = (B) => B.toString(16).padStart(2, "0").repeat(2);
+    this.dataEmitter.fire(
+      `\x1B]10;rgb:${g(A.foreground.r)}/${g(A.foreground.g)}/${g(A.foreground.b)}\x1B\\`
+    ), this.dataEmitter.fire(
+      `\x1B]11;rgb:${g(A.background.r)}/${g(A.background.g)}/${g(A.background.b)}\x1B\\`
+    );
   }
   /**
    * Check for title changes in written data (OSC sequences)

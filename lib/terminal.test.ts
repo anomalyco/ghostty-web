@@ -505,7 +505,12 @@ describe('paste()', () => {
       term.setOption('theme', { background: '#fafafa' });
       term.setOption('colorScheme', 'light');
 
-      expect(received).toEqual(['\x1b[?997;1n', '\x1b[?997;2n']);
+      expect(received).toEqual([
+        '\x1b[?997;1n',
+        '\x1b[?997;2n',
+        '\x1b]10;rgb:d4d4/d4d4/d4d4\x1b\\',
+        '\x1b]11;rgb:fafa/fafa/fafa\x1b\\',
+      ]);
       term.dispose();
     });
 
@@ -553,7 +558,15 @@ describe('paste()', () => {
       term.write('\x1b[?2031$p');
       term.setOption('colorScheme', 'light');
 
-      expect(received).toEqual(['\x1b[?2031;2$y', '\x1b[?997;1n', '\x1b[?997;2n']);
+      expect(received).toEqual([
+        '\x1b[?2031;2$y',
+        '\x1b[?997;1n',
+        '\x1b]10;rgb:ffff/ffff/ffff\x1b\\',
+        '\x1b]11;rgb:0000/0000/0000\x1b\\',
+        '\x1b[?997;2n',
+        '\x1b]10;rgb:ffff/ffff/ffff\x1b\\',
+        '\x1b]11;rgb:0000/0000/0000\x1b\\',
+      ]);
       term.dispose();
     });
   });
@@ -1560,6 +1573,7 @@ describe('Terminal Config', () => {
     term.open(container);
 
     try {
+      term.write('\x1b[?1049h\x1b[2Jactive screen');
       term.setOption('theme', { background: '#fafafa' });
       const colors = term.wasmTerm!.getColors();
       expect(colors.background).toEqual({ r: 250, g: 250, b: 250 });
