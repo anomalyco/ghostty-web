@@ -1970,7 +1970,6 @@ export declare class Terminal implements ITerminalCore {
      */
     private processTerminalResponses;
     private processTerminalQueries;
-    private reportColors;
     /**
      * Check for title changes in written data (OSC sequences)
      * Simplified implementation - looks for OSC 0, 1, 2
