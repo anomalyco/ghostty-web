@@ -521,6 +521,27 @@ describe('paste()', () => {
       expect(received).toEqual([]);
       term.dispose();
     });
+
+    test('responds to OSC foreground and background queries', async () => {
+      const term = await createIsolatedTerminal({
+        cols: 80,
+        rows: 24,
+        theme: { foreground: '#101112', background: '#fafafa' },
+      });
+      if (!container) return;
+      term.open(container);
+      const received: string[] = [];
+      term.onData((data) => received.push(data));
+
+      term.write('\x1b]10;?\x1b\\\x1b]11;?');
+      term.write('\x07');
+
+      expect(received).toEqual([
+        '\x1b]10;rgb:1010/1111/1212\x1b\\',
+        '\x1b]11;rgb:fafa/fafa/fafa\x1b\\',
+      ]);
+      term.dispose();
+    });
   });
 });
 
