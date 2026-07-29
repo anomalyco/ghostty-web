@@ -420,6 +420,34 @@ describe('InputHandler', () => {
       expect(dataReceived).toEqual(['你好']);
     });
 
+    test('clears the hidden textarea after composition', () => {
+      const inputElement = createMockContainer();
+      const handler = new InputHandler(
+        ghostty,
+        container as any,
+        (data) => dataReceived.push(data),
+        () => {
+          bellCalled = true;
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        inputElement as any
+      );
+
+      // The browser commits composed text into the focused textarea, because
+      // beforeinput is not prevented while composing.
+      (inputElement as any).value = '你好';
+
+      container.dispatchEvent(createCompositionEvent('compositionend', '你好'));
+
+      expect(dataReceived).toEqual(['你好']);
+      expect((inputElement as any).value).toBe('');
+
+      handler.dispose();
+    });
+
     test('avoids duplicate commit when compositionend fires before beforeinput', () => {
       const inputElement = createMockContainer();
       const handler = new InputHandler(

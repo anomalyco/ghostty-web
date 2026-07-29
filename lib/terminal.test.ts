@@ -129,6 +129,82 @@ describe('Terminal', () => {
     });
   });
 
+  describe('Focus', () => {
+    test('open, focus, and blur follow the public focus contract', async () => {
+      const outside = document.createElement('input');
+      document.body.appendChild(outside);
+      outside.focus();
+
+      const term = await createIsolatedTerminal();
+      term.open(container!);
+      const renderer = term.renderer as any;
+
+      expect(document.activeElement).toBe(outside);
+      expect(renderer.cursorBlinkInterval).toBeUndefined();
+      expect(term.textarea!.style.caretColor).toBe('transparent');
+
+      term.focus();
+      expect(document.activeElement).toBe(term.textarea);
+
+      outside.focus();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(document.activeElement).toBe(outside);
+
+      term.focus();
+      term.blur();
+      expect(document.activeElement).not.toBe(term.textarea);
+
+      term.dispose();
+      outside.remove();
+    });
+
+    test('click and window focus control cursor blinking', async () => {
+      const outside = document.createElement('input');
+      document.body.appendChild(outside);
+      const term = await createIsolatedTerminal({ cursorBlink: true });
+      term.open(container!);
+      const renderer = term.renderer as any;
+
+      container!
+        .querySelector('canvas')!
+        .dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+      expect(document.activeElement).toBe(term.textarea);
+      expect(renderer.cursorBlinkInterval).toBeDefined();
+
+      term.textarea!.dispatchEvent(
+        new FocusEvent('focusout', { bubbles: true, relatedTarget: term.element })
+      );
+      expect(renderer.cursorBlinkInterval).toBeDefined();
+
+      window.dispatchEvent(new Event('blur'));
+      expect(renderer.cursorBlinkInterval).toBeUndefined();
+
+      window.dispatchEvent(new Event('focus'));
+      expect(renderer.cursorBlinkInterval).toBeDefined();
+
+      window.dispatchEvent(new Event('blur'));
+      outside.focus();
+      window.dispatchEvent(new Event('focus'));
+      expect(renderer.cursorBlinkInterval).toBeUndefined();
+
+      const hasFocus = document.hasFocus;
+      document.hasFocus = () => false;
+      term.focus();
+      expect(renderer.cursorBlinkInterval).toBeUndefined();
+      document.hasFocus = hasFocus;
+      window.dispatchEvent(new Event('focus'));
+      expect(renderer.cursorBlinkInterval).toBeDefined();
+
+      window.dispatchEvent(new Event('blur'));
+      const element = term.element!;
+      term.dispose();
+      element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      window.dispatchEvent(new Event('focus'));
+      expect(renderer.cursorBlinkInterval).toBeUndefined();
+      outside.remove();
+    });
+  });
+
   describe('Properties', () => {
     test('exposes cols and rows', async () => {
       const term = await createIsolatedTerminal({ cols: 90, rows: 25 });
@@ -2474,11 +2550,12 @@ describe('Options Proxy handleOptionChange', () => {
     term.dispose();
   });
 
-  test('changing cursorBlink starts/stops blink timer', async () => {
+  test('changing cursorBlink starts/stops blink timer while focused', async () => {
     if (!container) return;
 
     const term = await createIsolatedTerminal({ cursorBlink: false });
     term.open(container);
+    term.focus();
 
     // Verify initial state
     expect(term.options.cursorBlink).toBe(false);

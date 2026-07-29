@@ -226,6 +226,7 @@ const HTML_TEMPLATE = `<!doctype html>
 
       const container = document.getElementById('terminal');
       await term.open(container);
+      term.focus();
       fitAddon.fit();
       fitAddon.observeResize(); // Auto-fit when container resizes
 

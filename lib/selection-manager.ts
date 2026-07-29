@@ -350,10 +350,7 @@ export class SelectionManager {
    * Focus the terminal (make it receive keyboard input)
    */
   focus(): void {
-    const canvas = this.renderer.getCanvas();
-    if (canvas.parentElement) {
-      canvas.parentElement.focus();
-    }
+    this.textarea.focus();
   }
 
   /**
@@ -436,11 +433,8 @@ export class SelectionManager {
       if (e.button === 0) {
         // Left click only
 
-        // CRITICAL: Focus the terminal so it can receive keyboard input
-        // The canvas doesn't have tabindex, but the parent container does
-        if (canvas.parentElement) {
-          canvas.parentElement.focus();
-        }
+        // beforeinput is attached to the textarea; keyboard events bubble to the parent
+        this.textarea.focus();
 
         const cell = this.pixelToCell(e.offsetX, e.offsetY);
 
