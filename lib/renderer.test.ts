@@ -21,6 +21,7 @@ function mockCanvas() {
   const drawImages: Array<{ width: number; height: number; x: number; y: number }> = [];
   const tints: Array<{ color: string; alpha: number; width: number; height: number }> = [];
   const paths: Array<[number, number, number, number]> = [];
+  const clearRects: Array<[number, number, number, number]> = [];
   let fillTextCount = 0;
   let strokeCount = 0;
   let clipCount = 0;
@@ -64,7 +65,8 @@ function mockCanvas() {
         transform = [a, b, c, d, e, f];
         transforms.push(transform);
       },
-      clearRect: () => {},
+      clearRect: (x: number, y: number, width: number, height: number) =>
+        clearRects.push([x, y, width, height]),
       fillText: () => {
         fillTextCount++;
         fillTextTransforms.push(transform);
@@ -100,6 +102,7 @@ function mockCanvas() {
     drawImages,
     tints,
     paths,
+    clearRects,
     get fillTextCount() {
       return fillTextCount;
     },
@@ -135,13 +138,14 @@ function buffer(
   line: GhosttyCell[] | null,
   cols: number,
   rows: number = 1,
-  cursor = { x: 0, y: 0, visible: false }
+  cursor = { x: 0, y: 0, visible: false },
+  dirty: boolean = true
 ) {
   return {
     getLine: () => line,
     getCursor: () => cursor,
     getDimensions: () => ({ cols, rows }),
-    isRowDirty: () => true,
+    isRowDirty: () => dirty,
     clearDirty: () => {},
   };
 }
@@ -527,6 +531,43 @@ describe('CanvasRenderer', () => {
         expect(mock.clipCount).toBe(1);
         expect(mock.fillTextTransforms.at(-1)).toEqual([1.25, 0, 0, 1.25, 0, 0]);
       } finally {
+        mock.restore();
+      }
+    });
+  });
+
+  describe('Focus', () => {
+    const cursor = { x: 0, y: 0, visible: true };
+    const line = [cell(0, 0, 0)];
+
+    test('draws while focused and erases the cursor on focus loss', () => {
+      const mock = mockCanvas();
+      const parent = document.createElement('div');
+      const canvas = document.createElement('canvas');
+      const textarea = document.createElement('textarea');
+      const outside = document.createElement('input');
+      parent.append(canvas, textarea);
+      document.body.append(parent, outside);
+
+      try {
+        const renderer = new CanvasRenderer(canvas, {
+          cursorStyle: 'block',
+          theme: { cursor: '#010203' },
+        });
+
+        textarea.focus();
+        renderer.render(buffer(line, 1, 1, cursor));
+        expect(mock.fillRects.some((call) => call.color === '#010203')).toBe(true);
+
+        mock.fillRects.length = 0;
+        mock.clearRects.length = 0;
+        outside.focus();
+        renderer.render(buffer(line, 1, 1, cursor, false));
+        expect(mock.clearRects).toContainEqual([0, 0, 8, 14]);
+        expect(mock.fillRects.some((call) => call.color === '#010203')).toBe(false);
+      } finally {
+        parent.remove();
+        outside.remove();
         mock.restore();
       }
     });
