@@ -472,10 +472,9 @@ export class Terminal implements ITerminalCore {
       // Create mouse tracking configuration
       const canvas = this.canvas;
       const renderer = this.renderer;
-      const wasmTerm = this.wasmTerm;
       const mouseConfig: MouseTrackingConfig = {
-        hasMouseTracking: () => wasmTerm?.hasMouseTracking() ?? false,
-        hasSgrMouseMode: () => wasmTerm?.getMode(1006, false) ?? true, // SGR extended mode
+        hasMouseTracking: () => this.wasmTerm?.hasMouseTracking() ?? false,
+        hasSgrMouseMode: () => this.wasmTerm?.getMode(1006, false) ?? true, // SGR extended mode
         getCellDimensions: () => ({
           width: renderer.charWidth,
           height: renderer.charHeight,
@@ -757,6 +756,9 @@ export class Terminal implements ITerminalCore {
    */
   reset(): void {
     this.assertOpen();
+
+    // Selection coordinates belong to the current buffer and must not survive replacement.
+    this.selectionManager?.clearSelection();
 
     // Free old WASM terminal and create new one
     if (this.wasmTerm) {

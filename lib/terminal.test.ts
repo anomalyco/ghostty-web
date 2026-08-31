@@ -301,6 +301,54 @@ describe('Terminal', () => {
       term.dispose();
     });
 
+    test('reset() keeps selection bound to the replacement terminal', async () => {
+      const term = await createIsolatedTerminal({ cols: 80, rows: 24 });
+      term.open(container!);
+      term.write('Before reset');
+      term.select(0, 0, 6);
+      expect(term.hasSelection()).toBe(true);
+
+      const initialWasmTerm = term.wasmTerm;
+      term.reset();
+      expect(term.wasmTerm).not.toBe(initialWasmTerm);
+      expect(term.hasSelection()).toBe(false);
+
+      term.resize(80, 48);
+      term.write('\x1b[31;1HLower half');
+      term.select(0, 30, 5);
+
+      expect(term.getSelection()).toBe('Lower');
+      expect(term.getSelectionPosition()).toEqual({
+        start: { x: 0, y: 30 },
+        end: { x: 4, y: 30 },
+      });
+
+      term.dispose();
+    });
+
+    test('reset() keeps mouse mode checks bound to the replacement terminal', async () => {
+      const term = await createIsolatedTerminal();
+      term.open(container!);
+
+      const initialWasmTerm = term.wasmTerm!;
+      term.reset();
+      const replacementWasmTerm = term.wasmTerm!;
+      const mouseConfig = (term as any).inputHandler.mouseConfig as {
+        hasMouseTracking: () => boolean;
+        hasSgrMouseMode: () => boolean;
+      };
+
+      initialWasmTerm.hasMouseTracking = () => false;
+      initialWasmTerm.getMode = () => false;
+      replacementWasmTerm.hasMouseTracking = () => true;
+      replacementWasmTerm.getMode = () => true;
+
+      expect(mouseConfig.hasMouseTracking()).toBe(true);
+      expect(mouseConfig.hasSgrMouseMode()).toBe(true);
+
+      term.dispose();
+    });
+
     test('focus() does not throw', async () => {
       const term = await createIsolatedTerminal();
       term.open(container!);

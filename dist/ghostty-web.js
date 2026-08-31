@@ -2158,7 +2158,10 @@ class gA {
 const l = class R {
   // ms between scroll steps
   constructor(A, g, I, C) {
-    this.selectionStart = null, this.selectionEnd = null, this.isSelecting = !1, this.mouseDownX = 0, this.mouseDownY = 0, this.dragThresholdMet = !1, this.mouseDownTarget = null, this.dirtySelectionRows = /* @__PURE__ */ new Set(), this.selectionChangedEmitter = new H(), this.boundMouseUpHandler = null, this.boundContextMenuHandler = null, this.boundClickHandler = null, this.boundDocumentMouseMoveHandler = null, this.autoScrollInterval = null, this.autoScrollDirection = 0, this.terminal = A, this.renderer = g, this.wasmTerm = I, this.textarea = C, this.attachEventListeners();
+    this.selectionStart = null, this.selectionEnd = null, this.isSelecting = !1, this.mouseDownX = 0, this.mouseDownY = 0, this.dragThresholdMet = !1, this.mouseDownTarget = null, this.dirtySelectionRows = /* @__PURE__ */ new Set(), this.selectionChangedEmitter = new H(), this.boundMouseUpHandler = null, this.boundContextMenuHandler = null, this.boundClickHandler = null, this.boundDocumentMouseMoveHandler = null, this.autoScrollInterval = null, this.autoScrollDirection = 0, this.terminal = A, this.renderer = g, this.initialWasmTerm = I, this.textarea = C, this.attachEventListeners();
+  }
+  get wasmTerm() {
+    return this.terminal.wasmTerm ?? this.initialWasmTerm;
   }
   // pixels from edge to trigger scroll
   /**
@@ -2869,16 +2872,16 @@ class wA {
       throw new Error("Terminal has been disposed");
     this.element = A, this.isOpen = !0;
     try {
-      A.hasAttribute("tabindex") || A.setAttribute("tabindex", "0"), A.setAttribute("contenteditable", "true"), A.addEventListener("beforeinput", (i) => {
-        i.target === A && i.preventDefault();
+      A.hasAttribute("tabindex") || A.setAttribute("tabindex", "0"), A.setAttribute("contenteditable", "true"), A.addEventListener("beforeinput", (D) => {
+        D.target === A && D.preventDefault();
       }), A.setAttribute("role", "textbox"), A.setAttribute("aria-label", "Terminal input"), A.setAttribute("aria-multiline", "true");
       const g = this.buildWasmConfig();
       this.wasmTerm = this.ghostty.createTerminal(this.cols, this.rows, g), this.wasmTerm.setColorScheme(this.options.colorScheme), this.canvas = document.createElement("canvas"), this.canvas.style.display = "block", this.canvas.style.cursor = "text", A.appendChild(this.canvas), this.textarea = document.createElement("textarea"), this.textarea.setAttribute("autocorrect", "off"), this.textarea.setAttribute("autocapitalize", "off"), this.textarea.setAttribute("spellcheck", "false"), this.textarea.setAttribute("tabindex", "0"), this.textarea.setAttribute("aria-label", "Terminal input"), this.textarea.style.position = "absolute", this.textarea.style.left = "0", this.textarea.style.top = "0", this.textarea.style.width = "1px", this.textarea.style.height = "1px", this.textarea.style.padding = "0", this.textarea.style.border = "none", this.textarea.style.margin = "0", this.textarea.style.opacity = "0", this.textarea.style.clipPath = "inset(50%)", this.textarea.style.overflow = "hidden", this.textarea.style.whiteSpace = "nowrap", this.textarea.style.resize = "none", A.appendChild(this.textarea);
       const I = this.textarea;
-      this.canvas.addEventListener("mousedown", (i) => {
-        i.preventDefault(), I.focus();
-      }), this.canvas.addEventListener("touchend", (i) => {
-        i.preventDefault(), I.focus();
+      this.canvas.addEventListener("mousedown", (D) => {
+        D.preventDefault(), I.focus();
+      }), this.canvas.addEventListener("touchend", (D) => {
+        D.preventDefault(), I.focus();
       }), this.renderer = new gA(this.canvas, {
         fontSize: this.options.fontSize,
         fontFamily: this.options.fontFamily,
@@ -2887,40 +2890,46 @@ class wA {
         theme: this.options.theme,
         ghostty: this.ghostty
       }), this.renderer.resize(this.cols, this.rows), this.scheduleFontRemeasure();
-      const C = this.canvas, Q = this.renderer, E = this.wasmTerm, D = {
-        hasMouseTracking: () => (E == null ? void 0 : E.hasMouseTracking()) ?? !1,
-        hasSgrMouseMode: () => (E == null ? void 0 : E.getMode(1006, !1)) ?? !0,
+      const C = this.canvas, Q = this.renderer, E = {
+        hasMouseTracking: () => {
+          var D;
+          return ((D = this.wasmTerm) == null ? void 0 : D.hasMouseTracking()) ?? !1;
+        },
+        hasSgrMouseMode: () => {
+          var D;
+          return ((D = this.wasmTerm) == null ? void 0 : D.getMode(1006, !1)) ?? !0;
+        },
         // SGR extended mode
         getCellDimensions: () => ({
           width: Q.charWidth,
           height: Q.charHeight
         }),
         getCanvasOffset: () => {
-          const i = C.getBoundingClientRect();
-          return { left: i.left, top: i.top };
+          const D = C.getBoundingClientRect();
+          return { left: D.left, top: D.top };
         }
       };
       this.inputHandler = new _(
         this.ghostty,
         A,
-        (i) => {
-          var o;
-          this.options.disableStdin || ((o = this.selectionManager) == null || o.clearSelection(), this.dataEmitter.fire(i));
+        (D) => {
+          var i;
+          this.options.disableStdin || ((i = this.selectionManager) == null || i.clearSelection(), this.dataEmitter.fire(D));
         },
         () => {
           this.bellEmitter.fire();
         },
-        (i) => {
-          this.keyEmitter.fire(i);
+        (D) => {
+          this.keyEmitter.fire(D);
         },
         this.customKeyEventHandler,
-        (i) => {
-          var o;
-          return ((o = this.wasmTerm) == null ? void 0 : o.getMode(i, !1)) ?? !1;
+        (D) => {
+          var i;
+          return ((i = this.wasmTerm) == null ? void 0 : i.getMode(D, !1)) ?? !1;
         },
         () => this.copySelection(),
         this.textarea,
-        D
+        E
       ), this.selectionManager = new BA(
         this,
         this.renderer,
@@ -3001,7 +3010,8 @@ class wA {
    * Reset terminal state
    */
   reset() {
-    this.assertOpen(), this.wasmTerm && this.wasmTerm.free();
+    var g;
+    this.assertOpen(), (g = this.selectionManager) == null || g.clearSelection(), this.wasmTerm && this.wasmTerm.free();
     const A = this.buildWasmConfig();
     this.wasmTerm = this.ghostty.createTerminal(this.cols, this.rows, A), this.wasmTerm.setColorScheme(this.options.colorScheme), this.renderer.clear(), this.currentTitle = "";
   }
