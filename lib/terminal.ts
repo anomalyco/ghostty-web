@@ -1276,7 +1276,7 @@ export class Terminal implements ITerminalCore {
 
     // Remove event listeners
     if (this.element) {
-      this.element.removeEventListener('wheel', this.handleWheel);
+      this.element.removeEventListener('wheel', this.handleWheel, { capture: true });
       this.element.removeEventListener('mousedown', this.handleMouseDown, { capture: true });
       this.element.removeEventListener('mousemove', this.handleMouseMove);
       this.element.removeEventListener('mouseleave', this.handleMouseLeave);
@@ -1586,12 +1586,18 @@ export class Terminal implements ITerminalCore {
   private handleWheel = (e: WheelEvent): void => {
     // Always prevent default browser scrolling
     e.preventDefault();
-    e.stopPropagation();
 
     // Allow custom handler to override
     if (this.customWheelEventHandler && this.customWheelEventHandler(e)) {
+      e.stopPropagation();
       return;
     }
+
+    // Application mouse reporting is handled by InputHandler in the bubble phase.
+    // Shift bypasses application capture so the terminal can retain native interactions.
+    if (this.wasmTerm?.hasMouseTracking() && !e.shiftKey) return;
+
+    e.stopPropagation();
 
     // Check if in alternate screen mode (vim, less, htop, etc.)
     const isAltScreen = this.wasmTerm?.isAlternateScreen() ?? false;

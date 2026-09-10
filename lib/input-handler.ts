@@ -751,7 +751,7 @@ export class InputHandler {
   private getMouseModifiers(event: MouseEvent): number {
     let mods = 0;
     if (event.shiftKey) mods |= 4;
-    if (event.metaKey) mods |= 8; // Meta (Cmd on Mac)
+    if (event.altKey) mods |= 8;
     if (event.ctrlKey) mods |= 16;
     return mods;
   }
@@ -818,7 +818,7 @@ export class InputHandler {
    */
   private handleMouseDown(event: MouseEvent): void {
     if (this.isDisposed) return;
-    if (!this.mouseConfig?.hasMouseTracking()) return;
+    if (!this.mouseConfig?.hasMouseTracking() || event.shiftKey) return;
 
     const cell = this.pixelToCell(event);
     if (!cell) return;
@@ -843,7 +843,7 @@ export class InputHandler {
    */
   private handleMouseUp(event: MouseEvent): void {
     if (this.isDisposed) return;
-    if (!this.mouseConfig?.hasMouseTracking()) return;
+    if (!this.mouseConfig?.hasMouseTracking() || event.shiftKey) return;
 
     const cell = this.pixelToCell(event);
     if (!cell) return;
@@ -861,7 +861,7 @@ export class InputHandler {
    */
   private handleMouseMove(event: MouseEvent): void {
     if (this.isDisposed) return;
-    if (!this.mouseConfig?.hasMouseTracking()) return;
+    if (!this.mouseConfig?.hasMouseTracking() || event.shiftKey) return;
 
     // Check if button motion mode or any-event tracking is enabled
     // Mode 1002 = button motion, Mode 1003 = any motion
@@ -876,13 +876,13 @@ export class InputHandler {
     const cell = this.pixelToCell(event);
     if (!cell) return;
 
-    // Determine which button to report (or 32 for motion with no button)
-    let button = 32; // Motion flag
+    // Motion uses bit 32 plus button 3 when no button is pressed.
+    let button = 35;
     if (this.mouseButtonsPressed & 1)
-      button += 0; // Left
+      button = 32; // Left
     else if (this.mouseButtonsPressed & 2)
-      button += 1; // Middle
-    else if (this.mouseButtonsPressed & 4) button += 2; // Right
+      button = 33; // Middle
+    else if (this.mouseButtonsPressed & 4) button = 34; // Right
 
     this.sendMouseEvent(button, cell.col, cell.row, false, event);
   }
@@ -892,13 +892,16 @@ export class InputHandler {
    */
   private handleWheel(event: WheelEvent): void {
     if (this.isDisposed) return;
-    if (!this.mouseConfig?.hasMouseTracking()) return;
+    if (!this.mouseConfig?.hasMouseTracking() || event.shiftKey) return;
 
     const cell = this.pixelToCell(event);
     if (!cell) return;
 
-    // Wheel events: button 64 = scroll up, button 65 = scroll down
-    const button = event.deltaY < 0 ? 64 : 65;
+    if (event.deltaX === 0 && event.deltaY === 0) return;
+
+    // Wheel buttons: 64/65 are up/down, 66/67 are left/right.
+    const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+    const button = horizontal ? (event.deltaX < 0 ? 66 : 67) : event.deltaY < 0 ? 64 : 65;
 
     this.sendMouseEvent(button, cell.col, cell.row, false, event);
 
