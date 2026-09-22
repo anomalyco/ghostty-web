@@ -811,23 +811,20 @@ class V {
           this.escape(C);
           break;
         case "osc":
-          C === 7 ? this.finish("\x07", g) : C === 27 ? this.state = "osc-escape" : this.body !== null && (this.body = this.body.length < 32 && C >= 32 && C < 127 ? this.body + String.fromCharCode(C) : null);
+          C === 7 ? this.finish("\x07", g) : C === 27 ? this.state = "osc-escape" : C < 32 || this.body !== null && (this.body = this.body.length < 32 && C >= 32 && C < 127 ? this.body + String.fromCharCode(C) : null);
           break;
         case "osc-escape":
           C === 92 ? this.finish("\x1B\\", g) : (this.body = "", this.escape(C));
           break;
         case "string":
-          C === 27 && (this.state = "string-escape");
-          break;
-        case "string-escape":
-          C === 92 ? this.reset() : C !== 27 && (this.state = "string");
+          C === 27 && (this.state = "escape");
           break;
       }
     }
     return g;
   }
   escape(A) {
-    A === 93 ? (this.state = "osc", this.body = "") : [80, 88, 94, 95].includes(A) ? this.state = "string" : this.state = A === 27 ? "escape" : "text";
+    A < 32 && A !== 27 || A === 127 || (A === 93 ? (this.state = "osc", this.body = "") : [80, 88, 94, 95].includes(A) ? this.state = "string" : this.state = A === 27 ? "escape" : "text");
   }
   finish(A, g) {
     var C;

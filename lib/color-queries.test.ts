@@ -125,9 +125,33 @@ describe('default terminal color replies', () => {
   test('does not answer query-looking text inside other control strings', () => {
     const { terminal, replies } = createTerminal();
     for (const introducer of ['P', 'X', '^', '_']) {
-      terminal.write(`\x1b${introducer}payload\x1b]11;?\x07\x1b\\`);
+      terminal.write(`\x1b${introducer}payload 11;?\x07\x1b\\`);
     }
     terminal.write('\x1b]2;literal 11;?\x07\x1b]111;?\x07');
+    expect(replies).toEqual([]);
+    terminal.write(codexQueries);
+    expect(replies.join('')).toBe(foregroundReply + backgroundReply);
+  });
+
+  test('recognizes queries after an escape interrupts another control string', () => {
+    const { terminal, replies } = createTerminal();
+    for (const introducer of ['P', 'X', '^', '_']) {
+      replies.length = 0;
+      terminal.write(`\x1b${introducer}payload\x1b]11;#112233\x07`);
+      terminal.write('\x1b]11;?\x07');
+      expect(replies.join('')).toBe('\x1b]11;rgb:1111/2222/3333\x07');
+    }
+  });
+
+  test('ignores embedded C0 controls without losing the query', () => {
+    const { terminal, replies } = createTerminal();
+    terminal.write('\x1b\x00]1\x001;?\x00\x07');
+    expect(replies.join('')).toBe('\x1b]11;rgb:ffff/ffff/ffff\x07');
+  });
+
+  test('does not interpret UTF-8 encoded C1 characters as control bytes', () => {
+    const { terminal, replies } = createTerminal();
+    terminal.write('\u009d11;?\u009c');
     expect(replies).toEqual([]);
     terminal.write(codexQueries);
     expect(replies.join('')).toBe(foregroundReply + backgroundReply);

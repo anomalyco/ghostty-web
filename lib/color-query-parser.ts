@@ -1,4 +1,4 @@
-type State = 'text' | 'escape' | 'osc' | 'osc-escape' | 'string' | 'string-escape';
+type State = 'text' | 'escape' | 'osc' | 'osc-escape' | 'string';
 interface ColorQuery {
   slot: 10 | 11;
   terminator: string;
@@ -33,7 +33,9 @@ export class ColorQueryParser {
         case 'osc':
           if (byte === 0x07) this.finish('\x07', queries);
           else if (byte === 0x1b) this.state = 'osc-escape';
-          else if (this.body !== null) {
+          else if (byte < 0x20) {
+            // Ghostty ignores other C0 controls inside OSC.
+          } else if (this.body !== null) {
             // Longer / non-ASCII payloads cannot be the queries we support.
             // Stay inside OSC until its terminator without retaining the data.
             this.body =
@@ -50,12 +52,9 @@ export class ColorQueryParser {
           }
           break;
         case 'string':
-          if (byte === 0x1b) this.state = 'string-escape';
-          break;
-        case 'string-escape':
-          // DCS / SOS / PM / APC payloads are opaque, including embedded OSC.
-          if (byte === 0x5c) this.reset();
-          else if (byte !== 0x1b) this.state = 'string';
+          // Like Ghostty's VT parser, ESC ends DCS / SOS / PM / APC and
+          // begins a new escape sequence (which may itself be an OSC).
+          if (byte === 0x1b) this.state = 'escape';
           break;
       }
     }
@@ -63,6 +62,8 @@ export class ColorQueryParser {
   }
 
   private escape(byte: number): void {
+    // Embedded C0 controls and DEL do not end an escape sequence.
+    if ((byte < 0x20 && byte !== 0x1b) || byte === 0x7f) return;
     if (byte === 0x5d) {
       this.state = 'osc';
       this.body = '';

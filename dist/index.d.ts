@@ -1705,7 +1705,7 @@ export declare class Terminal implements ITerminalCore {
     private animationFrameId?;
     private writeQueue;
     private fontLoadGeneration;
-    private colorQueryBuffer;
+    private colorQueryParser;
     private addons;
     private customKeyEventHandler?;
     private currentTitle;
