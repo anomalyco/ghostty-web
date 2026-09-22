@@ -788,7 +788,59 @@ class r {
     return (this.cell.flags & c.FAINT) !== 0;
   }
 }
-const V = {
+class V {
+  constructor() {
+    this.state = "text", this.body = "";
+  }
+  reset() {
+    this.state = "text", this.body = "";
+  }
+  read(A) {
+    const g = [];
+    for (let I = 0; I < A.length; I++) {
+      const C = typeof A == "string" ? A.charCodeAt(I) : A[I];
+      if (C === 24 || C === 26) {
+        this.reset();
+        continue;
+      }
+      switch (this.state) {
+        case "text":
+          C === 27 && (this.state = "escape");
+          break;
+        case "escape":
+          this.escape(C);
+          break;
+        case "osc":
+          C === 7 ? this.finish("\x07", g) : C === 27 ? this.state = "osc-escape" : this.body !== null && (this.body = this.body.length < 32 && C >= 32 && C < 127 ? this.body + String.fromCharCode(C) : null);
+          break;
+        case "osc-escape":
+          C === 92 ? this.finish("\x1B\\", g) : (this.body = "", this.escape(C));
+          break;
+        case "string":
+          C === 27 && (this.state = "string-escape");
+          break;
+        case "string-escape":
+          C === 92 ? this.reset() : C !== 27 && (this.state = "string");
+          break;
+      }
+    }
+    return g;
+  }
+  escape(A) {
+    A === 93 ? (this.state = "osc", this.body = "") : [80, 88, 94, 95].includes(A) ? this.state = "string" : this.state = A === 27 ? "escape" : "text";
+  }
+  finish(A, g) {
+    var C;
+    const I = (C = this.body) == null ? void 0 : C.match(/^(10|11);(\?(?:;\?)*)$/);
+    if (I) {
+      const Q = Number(I[1]), E = I[2].split(";").length;
+      for (let D = Q; D < Q + E && D <= 11; D++)
+        g.push({ slot: D, terminator: A });
+    }
+    this.reset();
+  }
+}
+const _ = {
   // Letters
   KeyA: w.A,
   KeyB: w.B,
@@ -943,7 +995,7 @@ const V = {
    * @returns Key enum value or null if unmapped
    */
   mapKeyCode(A) {
-    return V[A] ?? null;
+    return _[A] ?? null;
   }
   /**
    * Extract modifier flags from KeyboardEvent
@@ -1383,8 +1435,8 @@ const V = {
   }
 };
 Z.BEFORE_INPUT_IGNORE_MS = 100;
-let _ = Z;
-class $ {
+let $ = Z;
+class AA {
   // Terminal instance for buffer access
   constructor(A) {
     this.terminal = A, this.providers = [], this.linkCache = /* @__PURE__ */ new Map(), this.scannedRows = /* @__PURE__ */ new Set();
@@ -1479,7 +1531,7 @@ class $ {
     this.providers = [];
   }
 }
-class AA {
+class IA {
   constructor(A) {
     this.terminal = A;
   }
@@ -1665,7 +1717,7 @@ const n = class Y {
 };
 n.URL_REGEX = /(?:https?:\/\/|mailto:|ftp:\/\/|ssh:\/\/|git:\/\/|tel:|magnet:|gemini:\/\/|gopher:\/\/|news:)[\w\-.~:\/?#@!$&*+,;=%]+/gi;
 n.TRAILING_PUNCTUATION = /[.,;!?)\]]+$/;
-let IA = n;
+let gA = n;
 const x = {
   foreground: "#d4d4d4",
   background: "#1e1e1e",
@@ -1692,7 +1744,7 @@ const x = {
   brightCyan: "#29b8db",
   brightWhite: "#ffffff"
 };
-class gA {
+class BA {
   constructor(A, g = {}) {
     this.activeDevicePixelRatio = 0, this.canvasWidth = 0, this.canvasHeight = 0, this.spriteCache = /* @__PURE__ */ new Map(), this.cursorVisible = !0, this.lastCursorPosition = { x: 0, y: 0 }, this.lastViewportY = 0, this.currentBuffer = null, this.currentSelectionCoords = null, this.hoveredHyperlinkId = 0, this.previousHoveredHyperlinkId = 0, this.hoveredLinkRange = null, this.previousHoveredLinkRange = null, this.canvas = A;
     const I = A.getContext("2d", { alpha: !0 });
@@ -2618,15 +2670,15 @@ const l = class R {
 l.AUTO_SCROLL_EDGE_SIZE = 30;
 l.AUTO_SCROLL_SPEED = 3;
 l.AUTO_SCROLL_INTERVAL = 50;
-let BA = l;
-class wA {
+let CA = l;
+class oA {
   // 200ms fade animation
   constructor(A = {}) {
     this.unicode = {
       get activeVersion() {
         return "15.1";
       }
-    }, this.dataEmitter = new H(), this.resizeEmitter = new H(), this.bellEmitter = new H(), this.selectionChangeEmitter = new H(), this.keyEmitter = new H(), this.titleChangeEmitter = new H(), this.scrollEmitter = new H(), this.renderEmitter = new H(), this.cursorMoveEmitter = new H(), this.onData = this.dataEmitter.event, this.onResize = this.resizeEmitter.event, this.onBell = this.bellEmitter.event, this.onSelectionChange = this.selectionChangeEmitter.event, this.onKey = this.keyEmitter.event, this.onTitleChange = this.titleChangeEmitter.event, this.onScroll = this.scrollEmitter.event, this.onRender = this.renderEmitter.event, this.onCursorMove = this.cursorMoveEmitter.event, this.isOpen = !1, this.isDisposed = !1, this.writeQueue = [], this.fontLoadGeneration = 0, this.colorQueryBuffer = "", this.addons = [], this.currentTitle = "", this.viewportY = 0, this.targetViewportY = 0, this.lastCursorY = 0, this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.scrollbarDragStartViewportY = 0, this.scrollbarVisible = !1, this.scrollbarOpacity = 0, this.SCROLLBAR_HIDE_DELAY_MS = 1500, this.SCROLLBAR_FADE_DURATION_MS = 200, this.animateScroll = () => {
+    }, this.dataEmitter = new H(), this.resizeEmitter = new H(), this.bellEmitter = new H(), this.selectionChangeEmitter = new H(), this.keyEmitter = new H(), this.titleChangeEmitter = new H(), this.scrollEmitter = new H(), this.renderEmitter = new H(), this.cursorMoveEmitter = new H(), this.onData = this.dataEmitter.event, this.onResize = this.resizeEmitter.event, this.onBell = this.bellEmitter.event, this.onSelectionChange = this.selectionChangeEmitter.event, this.onKey = this.keyEmitter.event, this.onTitleChange = this.titleChangeEmitter.event, this.onScroll = this.scrollEmitter.event, this.onRender = this.renderEmitter.event, this.onCursorMove = this.cursorMoveEmitter.event, this.isOpen = !1, this.isDisposed = !1, this.writeQueue = [], this.fontLoadGeneration = 0, this.colorQueryParser = new V(), this.addons = [], this.currentTitle = "", this.viewportY = 0, this.targetViewportY = 0, this.lastCursorY = 0, this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.scrollbarDragStartViewportY = 0, this.scrollbarVisible = !1, this.scrollbarOpacity = 0, this.SCROLLBAR_HIDE_DELAY_MS = 1500, this.SCROLLBAR_FADE_DURATION_MS = 200, this.animateScroll = () => {
       if (!this.wasmTerm || this.scrollAnimationStartTime === void 0)
         return;
       const I = this.options.smoothScrollDuration ?? 100, C = this.targetViewportY - this.viewportY;
@@ -2720,7 +2772,7 @@ class wA {
       }
     }, this.handleMouseUp = () => {
       this.isDraggingScrollbar && (this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.canvas && (this.canvas.style.userSelect = "", this.canvas.style.webkitUserSelect = ""), this.scrollbarVisible && this.getScrollbackLength() > 0 && this.showScrollbar());
-    }, this.ghostty = A.ghostty ?? iA();
+    }, this.ghostty = A.ghostty ?? wA();
     const g = {
       cols: A.cols ?? 80,
       rows: A.rows ?? 24,
@@ -2885,7 +2937,7 @@ class wA {
         i.preventDefault(), I.focus();
       }), this.canvas.addEventListener("touchend", (i) => {
         i.preventDefault(), I.focus();
-      }), this.renderer = new gA(this.canvas, {
+      }), this.renderer = new BA(this.canvas, {
         fontSize: this.options.fontSize,
         fontFamily: this.options.fontFamily,
         cursorStyle: this.options.cursorStyle,
@@ -2906,7 +2958,7 @@ class wA {
           return { left: i.left, top: i.top };
         }
       };
-      this.inputHandler = new _(
+      this.inputHandler = new $(
         this.ghostty,
         A,
         (i) => {
@@ -2927,14 +2979,14 @@ class wA {
         () => this.copySelection(),
         this.textarea,
         D
-      ), this.selectionManager = new BA(
+      ), this.selectionManager = new CA(
         this,
         this.renderer,
         this.wasmTerm,
         this.textarea
       ), this.renderer.setSelectionManager(this.selectionManager), this.selectionManager.onSelectionChange(() => {
         this.selectionChangeEmitter.fire();
-      }), this.linkDetector = new $(this), this.linkDetector.registerProvider(new AA(this)), this.linkDetector.registerProvider(new IA(this)), A.addEventListener("mousedown", this.handleMouseDown, { capture: !0 }), A.addEventListener("mousemove", this.handleMouseMove), A.addEventListener("mouseleave", this.handleMouseLeave), A.addEventListener("click", this.handleClick), document.addEventListener("mouseup", this.handleMouseUp), A.addEventListener("wheel", this.handleWheel, { passive: !1, capture: !0 }), this.renderer.render(this.wasmTerm, !0, this.viewportY, this, this.scrollbarOpacity), this.startRenderLoop(), this.focus();
+      }), this.linkDetector = new AA(this), this.linkDetector.registerProvider(new IA(this)), this.linkDetector.registerProvider(new gA(this)), A.addEventListener("mousedown", this.handleMouseDown, { capture: !0 }), A.addEventListener("mousemove", this.handleMouseMove), A.addEventListener("mouseleave", this.handleMouseLeave), A.addEventListener("click", this.handleClick), document.addEventListener("mouseup", this.handleMouseUp), A.addEventListener("wheel", this.handleWheel, { passive: !1, capture: !0 }), this.renderer.render(this.wasmTerm, !0, this.viewportY, this, this.scrollbarOpacity), this.startRenderLoop(), this.focus();
     } catch (g) {
       throw this.isOpen = !1, this.cleanupComponents(), new Error(`Failed to open terminal: ${g}`);
     }
@@ -3007,7 +3059,7 @@ class wA {
    * Reset terminal state
    */
   reset() {
-    this.assertOpen(), this.wasmTerm && this.wasmTerm.free();
+    this.assertOpen(), this.colorQueryParser.reset(), this.wasmTerm && this.wasmTerm.free();
     const A = this.buildWasmConfig();
     this.wasmTerm = this.ghostty.createTerminal(this.cols, this.rows, A), this.wasmTerm.setColorScheme(this.options.colorScheme), this.renderer.clear(), this.currentTitle = "";
   }
@@ -3398,17 +3450,17 @@ class wA {
       }
   }
   processColorQueries(A) {
-    const g = this.colorQueryBuffer + (typeof A == "string" ? A : new TextDecoder().decode(A)), I = /(?:\x1b\]|\x9d)(10|11);\?(?:\x07|\x1b\\|\x9c)/g;
-    let C = 0, Q = null;
-    for (; (Q = I.exec(g)) !== null; ) {
-      C = I.lastIndex;
-      const i = this.wasmTerm.getColors(), o = Q[1] === "10" ? i.foreground : i.background, s = (G) => G.toString(16).padStart(2, "0").repeat(2);
+    const g = this.colorQueryParser.read(A);
+    if (g.length === 0)
+      return;
+    this.wasmTerm.update();
+    const I = this.wasmTerm.getColors(), C = (Q) => Q.toString(16).padStart(2, "0").repeat(2);
+    for (const { slot: Q, terminator: E } of g) {
+      const D = Q === 10 ? I.foreground : I.background;
       this.dataEmitter.fire(
-        `\x1B]${Q[1]};rgb:${s(o.r)}/${s(o.g)}/${s(o.b)}\x1B\\`
+        `\x1B]${Q};rgb:${C(D.r)}/${C(D.g)}/${C(D.b)}${E}`
       );
     }
-    const E = g.slice(C), D = Math.max(E.lastIndexOf("\x1B]"), E.lastIndexOf(""));
-    this.colorQueryBuffer = D >= 0 && E.length - D <= 16 ? E.slice(D) : "", !this.colorQueryBuffer && E.endsWith("\x1B") && (this.colorQueryBuffer = "\x1B");
   }
   /**
    * Check for title changes in written data (OSC sequences)
@@ -3454,8 +3506,8 @@ class wA {
     return this.assertOpen(), this.wasmTerm.hasMouseTracking();
   }
 }
-const CA = 2, QA = 1, EA = 15, DA = 100;
-class oA {
+const QA = 2, EA = 1, DA = 15, iA = 100;
+class sA {
   constructor() {
     this._isResizing = !1, this._fitPending = !1;
   }
@@ -3524,7 +3576,7 @@ class oA {
     const Q = window.getComputedStyle(C), E = Number.parseInt(Q.getPropertyValue("padding-top")) || 0, D = Number.parseInt(Q.getPropertyValue("padding-bottom")) || 0, i = Number.parseInt(Q.getPropertyValue("padding-left")) || 0, o = Number.parseInt(Q.getPropertyValue("padding-right")) || 0, s = C.clientWidth, G = C.clientHeight;
     if (s === 0 || G === 0)
       return;
-    const M = s - i - o - EA, F = G - E - D, k = Math.max(CA, Math.floor(M / I.width)), N = Math.max(QA, Math.floor(F / I.height));
+    const M = s - i - o - DA, F = G - E - D, k = Math.max(QA, Math.floor(M / I.width)), N = Math.max(EA, Math.floor(F / I.height));
     return { cols: k, rows: N };
   }
   /**
@@ -3541,15 +3593,15 @@ class oA {
     (A = this._terminal) != null && A.element && (this._resizeObserver || (this._resizeObserver = new ResizeObserver((g) => {
       g[0] && (this._resizeDebounceTimer && clearTimeout(this._resizeDebounceTimer), this._resizeDebounceTimer = setTimeout(() => {
         this.fit();
-      }, DA));
+      }, iA));
     }), this._resizeObserver.observe(this._terminal.element)));
   }
 }
 let O = null;
-async function sA() {
+async function GA() {
   O || (O = await t.load());
 }
-function iA() {
+function wA() {
   if (!O)
     throw new Error(
       `ghostty-web not initialized. Call init() before creating Terminal instances.
@@ -3566,24 +3618,24 @@ For tests, pass a Ghostty instance directly:
   return O;
 }
 export {
-  gA as CanvasRenderer,
+  BA as CanvasRenderer,
   c as CellFlags,
   f as DirtyState,
   H as EventEmitter,
-  oA as FitAddon,
+  sA as FitAddon,
   t as Ghostty,
   v as GhosttyTerminal,
-  _ as InputHandler,
+  $ as InputHandler,
   w as Key,
   W as KeyAction,
   u as KeyEncoder,
   p as KeyEncoderOption,
-  $ as LinkDetector,
+  AA as LinkDetector,
   q as Mods,
-  AA as OSC8LinkProvider,
-  BA as SelectionManager,
-  wA as Terminal,
-  IA as UrlRegexProvider,
-  iA as getGhostty,
-  sA as init
+  IA as OSC8LinkProvider,
+  CA as SelectionManager,
+  oA as Terminal,
+  gA as UrlRegexProvider,
+  wA as getGhostty,
+  GA as init
 };

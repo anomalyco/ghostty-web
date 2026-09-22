@@ -538,7 +538,7 @@ describe('paste()', () => {
 
       expect(received).toEqual([
         '\x1b]10;rgb:1010/1111/1212\x1b\\',
-        '\x1b]11;rgb:fafa/fafa/fafa\x1b\\',
+        '\x1b]11;rgb:fafa/fafa/fafa\x07',
       ]);
       term.dispose();
     });
