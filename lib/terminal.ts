@@ -16,6 +16,7 @@
  */
 
 import { BufferNamespace } from './buffer';
+import { ColorQueryParser } from './color-query-parser';
 import { EventEmitter } from './event-emitter';
 import type { Ghostty, GhosttyCell, GhosttyTerminal, GhosttyTerminalConfig } from './ghostty';
 import { getGhostty } from './index';
@@ -103,7 +104,7 @@ export class Terminal implements ITerminalCore {
   private animationFrameId?: number;
   private writeQueue: Uint8Array[] = [];
   private fontLoadGeneration = 0;
-  private colorQueryBuffer = '';
+  private colorQueryParser = new ColorQueryParser();
 
   // Addons
   private addons: ITerminalAddon[] = [];
@@ -757,6 +758,7 @@ export class Terminal implements ITerminalCore {
    */
   reset(): void {
     this.assertOpen();
+    this.colorQueryParser.reset();
 
     // Free old WASM terminal and create new one
     if (this.wasmTerm) {
@@ -1885,25 +1887,18 @@ export class Terminal implements ITerminalCore {
   }
 
   private processColorQueries(data: string | Uint8Array): void {
-    const input = this.colorQueryBuffer + (typeof data === 'string' ? data : new TextDecoder().decode(data));
-    const query = /(?:\x1b\]|\x9d)(10|11);\?(?:\x07|\x1b\\|\x9c)/g;
-    let consumed = 0;
-    let match: RegExpExecArray | null = null;
-
-    while ((match = query.exec(input)) !== null) {
-      consumed = query.lastIndex;
-      const colors = this.wasmTerm!.getColors();
-      const color = match[1] === '10' ? colors.foreground : colors.background;
-      const component = (value: number) => value.toString(16).padStart(2, '0').repeat(2);
+    const queries = this.colorQueryParser.read(data);
+    if (queries.length === 0) return;
+    // getColors() reads cached render state; a query can arrive before a frame.
+    this.wasmTerm!.update();
+    const colors = this.wasmTerm!.getColors();
+    const component = (value: number) => value.toString(16).padStart(2, '0').repeat(2);
+    for (const { slot, terminator } of queries) {
+      const color = slot === 10 ? colors.foreground : colors.background;
       this.dataEmitter.fire(
-        `\x1b]${match[1]};rgb:${component(color.r)}/${component(color.g)}/${component(color.b)}\x1b\\`
+        `\x1b]${slot};rgb:${component(color.r)}/${component(color.g)}/${component(color.b)}${terminator}`
       );
     }
-
-    const tail = input.slice(consumed);
-    const start = Math.max(tail.lastIndexOf('\x1b]'), tail.lastIndexOf('\x9d'));
-    this.colorQueryBuffer = start >= 0 && tail.length - start <= 16 ? tail.slice(start) : '';
-    if (!this.colorQueryBuffer && tail.endsWith('\x1b')) this.colorQueryBuffer = '\x1b';
   }
 
   /**
