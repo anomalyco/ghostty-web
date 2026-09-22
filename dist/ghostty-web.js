@@ -1905,8 +1905,7 @@ class gA {
     if (this.isInSelection(g, I))
       return this.theme.selectionBackground;
     let C = A.bg_r, Q = A.bg_g, E = A.bg_b;
-    if (A.flags & c.INVERSE && (C = A.fg_r, Q = A.fg_g, E = A.fg_b), !(C === 0 && Q === 0 && E === 0))
-      return this.rgbToCSS(C, Q, E);
+    return A.flags & c.INVERSE && (C = A.fg_r, Q = A.fg_g, E = A.fg_b), this.rgbToCSS(C, Q, E);
   }
   /**
    * Render a cell's text and decorations (Pass 2 of two-pass rendering)

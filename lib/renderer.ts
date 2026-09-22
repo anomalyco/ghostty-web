@@ -644,7 +644,7 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  private getCellBackground(cell: GhosttyCell, x: number, y: number): string | undefined {
+  private getCellBackground(cell: GhosttyCell, x: number, y: number): string {
     if (this.isInSelection(x, y)) return this.theme.selectionBackground;
 
     let bg_r = cell.bg_r,
@@ -658,8 +658,7 @@ export class CanvasRenderer {
       bg_b = cell.fg_b;
     }
 
-    // The theme background drawn for the full line shows through for default cells.
-    if (bg_r === 0 && bg_g === 0 && bg_b === 0) return;
+    // WASM resolves default colors already. RGB black is a real background too.
     return this.rgbToCSS(bg_r, bg_g, bg_b);
   }
 
@@ -779,8 +778,7 @@ export class CanvasRenderer {
     const thickness = Math.min(this.getDeviceThickness(), this.deviceMetrics.height);
     const position = strikethrough
       ? Math.round(
-          this.deviceMetrics.baseline -
-            (this.deviceMetrics.ascent * 0.75 * 0.75 + thickness) / 2
+          this.deviceMetrics.baseline - (this.deviceMetrics.ascent * 0.75 * 0.75 + thickness) / 2
         )
       : Math.round(this.deviceMetrics.baseline + thickness);
     const top = Math.min(Math.max(0, position), this.deviceMetrics.height - thickness);
