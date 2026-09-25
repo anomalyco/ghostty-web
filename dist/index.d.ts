@@ -1493,8 +1493,9 @@ export declare interface SelectionCoordinates {
 export declare class SelectionManager {
     private terminal;
     private renderer;
-    private wasmTerm;
+    private initialWasmTerm;
     private textarea;
+    private get wasmTerm();
     private selectionStart;
     private selectionEnd;
     private isSelecting;
