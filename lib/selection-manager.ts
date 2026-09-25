@@ -35,8 +35,12 @@ export interface SelectionCoordinates {
 export class SelectionManager {
   private terminal: Terminal;
   private renderer: CanvasRenderer;
-  private wasmTerm: GhosttyTerminal;
+  private initialWasmTerm: GhosttyTerminal;
   private textarea: HTMLTextAreaElement;
+
+  private get wasmTerm(): GhosttyTerminal {
+    return this.terminal.wasmTerm ?? this.initialWasmTerm;
+  }
 
   // Selection state - coordinates are in ABSOLUTE buffer space (viewportY + viewportRow)
   // This ensures selection persists correctly when scrolling
@@ -107,7 +111,7 @@ export class SelectionManager {
   ) {
     this.terminal = terminal;
     this.renderer = renderer;
-    this.wasmTerm = wasmTerm;
+    this.initialWasmTerm = wasmTerm;
     this.textarea = textarea;
 
     // Attach mouse event listeners

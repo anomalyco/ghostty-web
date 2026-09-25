@@ -235,6 +235,30 @@ describe('Terminal Scrolling', () => {
       expect(data).toEqual(['\x1B[<8;6;3M']);
     });
 
+    test('reports mouse events from the replacement terminal after reset', () => {
+      const initialWasmTerm = terminal.wasmTerm;
+      if (!initialWasmTerm) throw new Error('Terminal is not open');
+      terminal.reset();
+
+      // Make the stale reference deterministic; reading a freed WASM instance is undefined.
+      initialWasmTerm.hasMouseTracking = () => false;
+      terminal.write('\x1B[?1000h\x1B[?1006h');
+
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+      container.querySelector('canvas')!.dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          clientX: 40,
+          clientY: 30,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      expect(data).toEqual(['\x1B[<0;6;3M']);
+    });
+
     test('does not start terminal selection while an application owns the mouse', () => {
       container.querySelector('canvas')!.dispatchEvent(
         new MouseEvent('mousedown', {
