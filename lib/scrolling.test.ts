@@ -168,6 +168,107 @@ describe('Terminal Scrolling', () => {
     });
   });
 
+  describe('Application Mouse Tracking', () => {
+    beforeEach(() => {
+      terminal.write('\x1B[?1049h\x1B[?1000h\x1B[?1002h\x1B[?1003h\x1B[?1006h');
+    });
+
+    const dispatchWheel = (deltaX: number, deltaY: number) => {
+      const event = new WheelEvent('wheel', { deltaX, deltaY, bubbles: true, cancelable: true });
+      Object.defineProperties(event, { clientX: { value: 40 }, clientY: { value: 30 } });
+      container.querySelector('canvas')!.dispatchEvent(event);
+    };
+
+    test('reports wheel events as SGR mouse sequences instead of arrow keys', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      dispatchWheel(0, -100);
+
+      expect(data).toEqual(['\x1B[<64;6;3M']);
+    });
+
+    test('reports small trackpad movement without losing the mouse event', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      dispatchWheel(0, -1);
+
+      expect(data).toEqual(['\x1B[<64;6;3M']);
+    });
+
+    test('reports horizontal wheel movement', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      dispatchWheel(100, 0);
+
+      expect(data).toEqual(['\x1B[<67;6;3M']);
+    });
+
+    test('reports motion without a pressed button using button code 35', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      container
+        .querySelector('canvas')!
+        .dispatchEvent(new MouseEvent('mousemove', { clientX: 40, clientY: 30, bubbles: true }));
+
+      expect(data).toEqual(['\x1B[<35;6;3M']);
+    });
+
+    test('encodes the Alt mouse modifier', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      container.querySelector('canvas')!.dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          altKey: true,
+          clientX: 40,
+          clientY: 30,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      expect(data).toEqual(['\x1B[<8;6;3M']);
+    });
+
+    test('does not start terminal selection while an application owns the mouse', () => {
+      container.querySelector('canvas')!.dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          clientX: 40,
+          clientY: 30,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      expect((terminal as any).selectionManager.isSelecting).toBe(false);
+    });
+
+    test('lets Shift bypass application mouse capture for text selection', () => {
+      const data: string[] = [];
+      terminal.onData((value) => data.push(value));
+
+      container.querySelector('canvas')!.dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          shiftKey: true,
+          clientX: 40,
+          clientY: 30,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      expect(data).toEqual([]);
+      expect((terminal as any).selectionManager.isSelecting).toBe(true);
+    });
+  });
+
   describe('Mode Transitions', () => {
     test('should switch behavior when entering alternate screen', async () => {
       // Start in normal mode
