@@ -157,6 +157,7 @@
         term.loadAddon(fitAddon);
 
         term.open(document.getElementById('terminal-container'));
+        term.focus();
         fitAddon.fit();
         fitAddon.observeResize(); // Auto-fit when container resizes
 

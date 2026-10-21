@@ -126,6 +126,7 @@ export class CanvasRenderer {
   private cursorVisible: boolean = true;
   private cursorBlinkInterval?: number;
   private lastCursorPosition: { x: number; y: number } = { x: 0, y: 0 };
+  private lastCursorVisible: boolean = false;
 
   // Viewport tracking (for scrolling)
   private lastViewportY: number = 0;
@@ -356,20 +357,18 @@ export class CanvasRenderer {
       this.lastViewportY = viewportY;
     }
 
-    // Check if cursor position changed or if blinking (need to redraw cursor line)
+    const cursorVisible = this.isCursorVisible(cursor, viewportY);
+    // Check if cursor position or visibility changed, or if blinking
     const cursorMoved =
       cursor.x !== this.lastCursorPosition.x || cursor.y !== this.lastCursorPosition.y;
-    if (cursorMoved || this.cursorBlink) {
-      // Mark cursor lines as needing redraw
+    if (cursorMoved || this.cursorBlink || cursorVisible !== this.lastCursorVisible) {
       if (!forceAll && !buffer.isRowDirty(cursor.y)) {
-        // Need to redraw cursor line
         const line = buffer.getLine(cursor.y);
         if (line) {
           this.renderLine(line, cursor.y, dims.cols);
         }
       }
       if (cursorMoved && this.lastCursorPosition.y !== cursor.y) {
-        // Also redraw old cursor line if cursor moved to different line
         if (!forceAll && !buffer.isRowDirty(this.lastCursorPosition.y)) {
           const line = buffer.getLine(this.lastCursorPosition.y);
           if (line) {
@@ -538,8 +537,7 @@ export class CanvasRenderer {
 
     // Link underlines are drawn during cell rendering (see renderCell)
 
-    // Render cursor (only if we're at the bottom, not scrolled)
-    if (viewportY === 0 && cursor.visible && this.cursorVisible) {
+    if (cursorVisible) {
       this.renderCursor(cursor.x, cursor.y);
     }
 
@@ -548,8 +546,8 @@ export class CanvasRenderer {
       this.renderScrollbar(viewportY, scrollbackLength, dims.rows, scrollbarOpacity);
     }
 
-    // Update last cursor position
     this.lastCursorPosition = { x: cursor.x, y: cursor.y };
+    this.lastCursorVisible = cursorVisible;
 
     // ALWAYS clear dirty flags after rendering, regardless of forceAll.
     // This is critical - if we don't clear after a full redraw, the dirty
@@ -852,6 +850,17 @@ export class CanvasRenderer {
 
   private getDeviceThickness(): number {
     return Math.max(1, Math.ceil(this.deviceMetrics.ascent * 0.75 * 0.75 * 0.15));
+  }
+
+  private isCursorVisible(
+    cursor: { x: number; y: number; visible: boolean },
+    viewportY: number
+  ): boolean {
+    const parent = this.canvas.parentElement;
+    const focused = !parent || (document.hasFocus() && parent.contains(document.activeElement));
+    return (
+      viewportY === 0 && cursor.visible && focused && (!this.cursorBlink || this.cursorVisible)
+    );
   }
 
   /**

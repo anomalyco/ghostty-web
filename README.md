@@ -59,11 +59,14 @@ const term = new Terminal({
 });
 
 term.open(document.getElementById('terminal'));
+term.focus();
 term.onData((data) => websocket.send(data));
 websocket.onmessage = (e) => term.write(e.data);
 ```
 
 For a comprehensive client <-> server example, refer to the [demo](./demo/index.html#L141).
+
+`open()` mounts without focusing, and the cursor is hidden while unfocused.
 
 ## Development
 

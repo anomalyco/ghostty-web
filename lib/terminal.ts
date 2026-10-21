@@ -100,6 +100,7 @@ export class Terminal implements ITerminalCore {
   // Lifecycle state
   private isOpen = false;
   private isDisposed = false;
+  private isFocused = false;
   private animationFrameId?: number;
   private writeQueue: Uint8Array[] = [];
   private fontLoadGeneration = 0;
@@ -199,7 +200,7 @@ export class Terminal implements ITerminalCore {
       case 'cursorStyle':
         if (this.renderer) {
           this.renderer.setCursorStyle(this.options.cursorStyle);
-          this.renderer.setCursorBlink(this.options.cursorBlink);
+          this.renderer.setCursorBlink(this.isFocused && this.options.cursorBlink);
         }
         break;
 
@@ -440,7 +441,14 @@ export class Terminal implements ITerminalCore {
       this.textarea.style.overflow = 'hidden';
       this.textarea.style.whiteSpace = 'nowrap';
       this.textarea.style.resize = 'none';
+      this.textarea.style.caretColor = 'transparent';
       parent.appendChild(this.textarea);
+
+      parent.addEventListener('focusin', this.handleFocusIn);
+      parent.addEventListener('focusout', this.handleFocusOut);
+      window.addEventListener('focus', this.handleWindowFocus);
+      window.addEventListener('blur', this.handleWindowBlur);
+      this.isFocused = document.hasFocus() && parent.contains(document.activeElement);
 
       // Focus textarea on interaction - preventDefault before focus
       const textarea = this.textarea;
@@ -460,10 +468,11 @@ export class Terminal implements ITerminalCore {
         fontSize: this.options.fontSize,
         fontFamily: this.options.fontFamily,
         cursorStyle: this.options.cursorStyle,
-        cursorBlink: this.options.cursorBlink,
+        cursorBlink: false,
         theme: this.options.theme,
         ghostty: this.ghostty!,
       });
+      this.renderer.setCursorBlink(this.isFocused && this.options.cursorBlink);
 
       // Size canvas to terminal dimensions (use renderer.resize for proper DPI scaling)
       this.renderer.resize(this.cols, this.rows);
@@ -565,9 +574,6 @@ export class Terminal implements ITerminalCore {
 
       // Start render loop
       this.startRenderLoop();
-
-      // Focus input (auto-focus so user can start typing immediately)
-      this.focus();
     } catch (error) {
       // Clean up on error
       this.isOpen = false;
@@ -777,25 +783,17 @@ export class Terminal implements ITerminalCore {
    * Focus terminal input
    */
   focus(): void {
-    if (this.isOpen && this.element) {
-      // Focus immediately for immediate keyboard/wheel event handling
-      this.element.focus();
-
-      // Also schedule a delayed focus as backup to ensure it sticks
-      // (some browsers may need this if DOM isn't fully settled)
-      setTimeout(() => {
-        this.element?.focus();
-      }, 0);
-    }
+    if (!this.isOpen) return;
+    this.textarea?.focus();
   }
 
   /**
    * Blur terminal (remove focus)
    */
   blur(): void {
-    if (this.isOpen && this.element) {
-      this.element.blur();
-    }
+    if (!this.isOpen) return;
+    this.textarea?.blur();
+    this.element?.blur();
   }
 
   /**
@@ -1244,6 +1242,14 @@ export class Terminal implements ITerminalCore {
    * Clean up components (called on dispose or error)
    */
   private cleanupComponents(): void {
+    if (this.element) {
+      this.element.removeEventListener('focusin', this.handleFocusIn);
+      this.element.removeEventListener('focusout', this.handleFocusOut);
+    }
+    window.removeEventListener('focus', this.handleWindowFocus);
+    window.removeEventListener('blur', this.handleWindowBlur);
+    this.isFocused = false;
+
     // Dispose selection manager
     if (this.selectionManager) {
       this.selectionManager.dispose();
@@ -1317,6 +1323,28 @@ export class Terminal implements ITerminalCore {
     this.element = undefined;
     this.textarea = undefined;
   }
+
+  private setFocused(focused: boolean): void {
+    if (this.isFocused === focused) return;
+    this.isFocused = focused;
+    this.renderer?.setCursorBlink(focused && this.options.cursorBlink);
+  }
+
+  private handleFocusIn = (): void => {
+    if (document.hasFocus()) this.setFocused(true);
+  };
+
+  private handleFocusOut = (event: FocusEvent): void => {
+    if (!this.element?.contains(event.relatedTarget as Node | null)) this.setFocused(false);
+  };
+
+  private handleWindowFocus = (): void => {
+    this.setFocused(this.element?.contains(document.activeElement) ?? false);
+  };
+
+  private handleWindowBlur = (): void => {
+    this.setFocused(false);
+  };
 
   /**
    * Assert terminal is open (throw if not)

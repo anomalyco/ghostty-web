@@ -19,6 +19,7 @@ export declare class CanvasRenderer {
     private cursorVisible;
     private cursorBlinkInterval?;
     private lastCursorPosition;
+    private lastCursorVisible;
     private lastViewportY;
     private currentBuffer;
     private selectionManager?;
@@ -72,6 +73,7 @@ export declare class CanvasRenderer {
     private getCellForeground;
     private getSprite;
     private getDeviceThickness;
+    private isCursorVisible;
     /**
      * Render cursor
      */
@@ -1702,6 +1704,7 @@ export declare class Terminal implements ITerminalCore {
     readonly onCursorMove: IEvent<void>;
     private isOpen;
     private isDisposed;
+    private isFocused;
     private animationFrameId?;
     private writeQueue;
     private fontLoadGeneration;
@@ -1928,6 +1931,11 @@ export declare class Terminal implements ITerminalCore {
      * Clean up components (called on dispose or error)
      */
     private cleanupComponents;
+    private setFocused;
+    private handleFocusIn;
+    private handleFocusOut;
+    private handleWindowFocus;
+    private handleWindowBlur;
     /**
      * Assert terminal is open (throw if not)
      */

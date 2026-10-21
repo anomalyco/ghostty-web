@@ -714,6 +714,12 @@ export class InputHandler {
         }
       }
     }
+
+    // Clear composition text committed into the hidden textarea
+    if (this.inputElement && this.inputElement !== this.container) {
+      const input = this.inputElement as HTMLTextAreaElement;
+      if (input.value) input.value = '';
+    }
   }
 
   // ==========================================================================
