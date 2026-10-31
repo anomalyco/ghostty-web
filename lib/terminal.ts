@@ -1506,12 +1506,14 @@ export class Terminal implements ITerminalCore {
               const startViewportY = link.range.start.y - scrollbackLength + viewportYForLinks;
               const endViewportY = link.range.end.y - scrollbackLength + viewportYForLinks;
 
-              // Only show underline if link is visible in viewport
+              // Only show underline if link is visible in viewport. A multi-row
+              // link clipped by the viewport is underlined from the first visible
+              // row's start and to the last visible row's end.
               if (startViewportY < this.rows && endViewportY >= 0) {
                 this.renderer.setHoveredLinkRange({
-                  startX: link.range.start.x,
+                  startX: startViewportY < 0 ? 0 : link.range.start.x,
                   startY: Math.max(0, startViewportY),
-                  endX: link.range.end.x,
+                  endX: endViewportY >= this.rows ? this.cols - 1 : link.range.end.x,
                   endY: Math.min(this.rows - 1, endViewportY),
                 });
               } else {

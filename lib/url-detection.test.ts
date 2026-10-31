@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { UrlRegexProvider } from './providers/url-regex-provider';
+import { createIsolatedTerminal } from './test-helpers';
 import type { ILink } from './types';
 
 /**
@@ -183,5 +184,102 @@ describe('URL Detection', () => {
     expect(links).toBeDefined();
     expect(links?.length).toBe(1);
     expect(links?.[0].text).toContain('magnet:?xt=urn:btih:abc123');
+  });
+});
+
+/**
+ * Mock terminal whose rows are given as text. A row marked wrapped is a
+ * soft-wrapped continuation of the row above, like isWrapped in the buffer.
+ * Characters in `wide` occupy two cells, the second a zero-width spacer.
+ */
+function createMockRows(rows: Array<{ text: string; wrapped?: boolean }>, wide = '') {
+  const lines = rows.map(({ text, wrapped }) => {
+    const cells = Array.from(text).flatMap((char) => {
+      const cell = { getCodepoint: () => char.codePointAt(0) || 0, getWidth: () => 1 };
+      if (!wide.includes(char)) return [cell];
+      return [cell, { getCodepoint: () => 0, getWidth: () => 0 }];
+    });
+    return { length: cells.length, isWrapped: wrapped ?? false, getCell: (x: number) => cells[x] };
+  });
+  return { buffer: { active: { getLine: (y: number) => lines[y] } } };
+}
+
+function getRowLinks(terminal: unknown, y: number): Promise<ILink[] | undefined> {
+  const provider = new UrlRegexProvider(terminal as any);
+  return new Promise((resolve) => provider.provideLinks(y, resolve));
+}
+
+describe('URL Detection across soft-wrapped rows', () => {
+  const wrappedUrl = createMockRows([
+    { text: 'Open http://localhost:5174/#setup-key=6gUCrCAV' },
+    { text: 'nq_CYVZYBoCDtsL-6U1gqftme4sEJ_l2Qms to set up', wrapped: true },
+  ]);
+  const fullUrl = 'http://localhost:5174/#setup-key=6gUCrCAVnq_CYVZYBoCDtsL-6U1gqftme4sEJ_l2Qms';
+
+  test('detects a URL wrapped onto the next row from its first row', async () => {
+    const links = await getRowLinks(wrappedUrl, 0);
+    expect(links?.length).toBe(1);
+    expect(links?.[0].text).toBe(fullUrl);
+    expect(links?.[0].range).toEqual({ start: { x: 5, y: 0 }, end: { x: 34, y: 1 } });
+  });
+
+  test('detects the same URL from its continuation row', async () => {
+    const links = await getRowLinks(wrappedUrl, 1);
+    expect(links?.length).toBe(1);
+    expect(links?.[0].text).toBe(fullUrl);
+    expect(links?.[0].range).toEqual({ start: { x: 5, y: 0 }, end: { x: 34, y: 1 } });
+  });
+
+  test('joins a URL wrapped across three rows', async () => {
+    const rows = createMockRows([
+      { text: 'see https://exa' },
+      { text: 'mple.com/a/very', wrapped: true },
+      { text: '/long/path done', wrapped: true },
+    ]);
+    for (const y of [0, 1, 2]) {
+      const links = await getRowLinks(rows, y);
+      expect(links?.[0].text).toBe('https://example.com/a/very/long/path');
+      expect(links?.[0].range).toEqual({ start: { x: 4, y: 0 }, end: { x: 9, y: 2 } });
+    }
+  });
+
+  test('does not join rows separated by a hard newline', async () => {
+    const rows = createMockRows([
+      { text: 'Open http://localhost:5174/#setup-key=6gUCrCAV' },
+      { text: 'nq_CYVZYBoCDtsL-6U1gqftme4sEJ_l2Qms' },
+    ]);
+    const links = await getRowLinks(rows, 0);
+    expect(links?.[0].text).toBe('http://localhost:5174/#setup-key=6gUCrCAV');
+    expect(links?.[0].range.end).toEqual({ x: 45, y: 0 });
+    expect(await getRowLinks(rows, 1)).toBeUndefined();
+  });
+
+  test('returns only links touching the requested row', async () => {
+    const rows = createMockRows([
+      { text: 'https://a.com and some text ' },
+      { text: 'here then https://b.com', wrapped: true },
+    ]);
+    expect((await getRowLinks(rows, 0))?.map((link) => link.text)).toEqual(['https://a.com']);
+    expect((await getRowLinks(rows, 1))?.map((link) => link.text)).toEqual(['https://b.com']);
+  });
+
+  test('maps columns past wide characters and surrogate pairs', async () => {
+    const rows = createMockRows([{ text: '漢😀 https://example.com' }], '漢😀');
+    const links = await getRowLinks(rows, 0);
+    expect(links?.[0].text).toBe('https://example.com');
+    expect(links?.[0].range).toEqual({ start: { x: 5, y: 0 }, end: { x: 23, y: 0 } });
+  });
+
+  test('detects a URL the real terminal soft-wraps', async () => {
+    const term = await createIsolatedTerminal({ cols: 20, rows: 5 });
+    term.open(document.createElement('div'));
+    try {
+      term.write('go https://example.com/abcdefghijklmnop now');
+      const links = await getRowLinks(term, 1);
+      expect(links?.[0].text).toBe('https://example.com/abcdefghijklmnop');
+      expect(links?.[0].range).toEqual({ start: { x: 3, y: 0 }, end: { x: 18, y: 1 } });
+    } finally {
+      term.dispose();
+    }
   });
 });
