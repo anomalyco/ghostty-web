@@ -642,9 +642,9 @@ declare interface IBufferLine {
  */
 declare interface IBufferLineForUrlProvider {
     length: number;
-    getCell(x: number): {
-        getCodepoint(): number;
-    } | undefined;
+    /** True when this row is a soft-wrapped continuation of the row above */
+    isWrapped?: boolean;
+    getCell(x: number): ICellForUrlProvider | undefined;
 }
 
 /**
@@ -683,6 +683,11 @@ export declare interface IBufferRange {
 declare interface IBufferRange_2 {
     start: IBufferCellPosition;
     end: IBufferCellPosition;
+}
+
+declare interface ICellForUrlProvider {
+    getCodepoint(): number;
+    getWidth?(): number;
 }
 
 export declare interface IDisposable {
@@ -2041,8 +2046,9 @@ export declare type TerminalHandle = number;
 /**
  * URL Regex Provider
  *
- * Detects plain text URLs on a single line using regex.
- * Does not support multi-line URLs or file paths.
+ * Detects plain text URLs using regex. A URL that the terminal soft-wrapped
+ * across rows is detected as one link spanning those rows. Rows the program
+ * separated with a real newline are never joined. Does not detect file paths.
  *
  * Supported protocols:
  * - https://, http://
@@ -2064,15 +2070,17 @@ export declare class UrlRegexProvider implements ILinkProvider {
      * Common punctuation that's unlikely to be part of the URL
      */
     private static readonly TRAILING_PUNCTUATION;
+    /**
+     * Most rows joined in either direction from the requested row, bounding the
+     * scan for very long wrapped output.
+     */
+    private static readonly MAX_WRAPPED_ROWS;
     constructor(terminal: ITerminalForUrlProvider);
     /**
-     * Provide all regex-detected URLs on the given row
+     * Provide all regex-detected URLs touching the given row. A URL that
+     * soft-wraps onto neighbouring rows is returned with its full multi-row range.
      */
     provideLinks(y: number, callback: (links: ILink[] | undefined) => void): void;
-    /**
-     * Convert a buffer line to plain text string
-     */
-    private lineToText;
     dispose(): void;
 }
 
