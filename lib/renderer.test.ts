@@ -572,4 +572,109 @@ describe('CanvasRenderer', () => {
       }
     });
   });
+
+  describe('Transparent theme background', () => {
+    test('paints cells matching the theme background when transparency is not enabled', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          theme: { background: '#16161600' },
+        });
+        renderer.render(buffer([cell(22, 22, 22)], 1));
+        expect(mock.fillRects.map((call) => call.color)).toContain('rgb(22, 22, 22)');
+      } finally {
+        mock.restore();
+      }
+    });
+
+    test('skips cells matching a transparent theme background when allowTransparency is set', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          allowTransparency: true,
+          theme: { background: '#16161600' },
+        });
+        renderer.render(buffer([cell(22, 22, 22)], 1));
+        expect(mock.fillRects.map((call) => call.color)).not.toContain('rgb(22, 22, 22)');
+        // The full line is still filled with the (translucent) theme background.
+        expect(mock.fillRects.map((call) => call.color)).toContain('#16161600');
+      } finally {
+        mock.restore();
+      }
+    });
+
+    test('keeps skipping RGB-zero cells regardless of the option', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          allowTransparency: true,
+          theme: { background: '#16161600' },
+        });
+        renderer.render(buffer([cell(0, 0, 0)], 1));
+        expect(mock.fillRects.map((call) => call.color)).not.toContain('rgb(0, 0, 0)');
+      } finally {
+        mock.restore();
+      }
+    });
+
+    test('still paints cells matching an opaque theme background when allowTransparency is set', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          allowTransparency: true,
+          theme: { background: '#161616' },
+        });
+        renderer.render(buffer([cell(22, 22, 22)], 1));
+        expect(mock.fillRects.map((call) => call.color)).toContain('rgb(22, 22, 22)');
+      } finally {
+        mock.restore();
+      }
+    });
+
+    test('follows the provider background when it differs from the theme', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          allowTransparency: true,
+          theme: { background: '#16161600' },
+          defaultBackgroundProvider: () => [51, 68, 85],
+        });
+        const line = [cell(22, 22, 22), cell(51, 68, 85)];
+        renderer.render(buffer(line, 2));
+
+        expect((renderer as any).getCellBackground(line[1], 1, 0)).toBeUndefined();
+        expect((renderer as any).getCellBackground(line[0], 0, 0)).toBe('rgb(22, 22, 22)');
+
+        mock.fillRects.length = 0;
+        renderer.render(buffer(line, 2), true);
+        expect(mock.fillRects.map((call) => call.color)).toContain('rgb(51, 68, 85)');
+      } finally {
+        mock.restore();
+      }
+    });
+
+    test('falls back to the theme background when the provider returns null', () => {
+      const mock = mockCanvas();
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          allowTransparency: true,
+          theme: { background: '#16161600' },
+          defaultBackgroundProvider: () => null,
+        });
+        const line = [cell(22, 22, 22), cell(51, 68, 85)];
+        renderer.render(buffer(line, 2));
+
+        expect((renderer as any).getCellBackground(line[0], 0, 0)).toBeUndefined();
+        expect((renderer as any).getCellBackground(line[1], 1, 0)).toBe('rgb(51, 68, 85)');
+
+        mock.fillRects.length = 0;
+        renderer.render(buffer(line, 2), true);
+        const colors = mock.fillRects.map((call) => call.color);
+        expect(colors).toContain('#16161600');
+        expect(colors).not.toContain('rgb(22, 22, 22)');
+      } finally {
+        mock.restore();
+      }
+    });
+  });
 });

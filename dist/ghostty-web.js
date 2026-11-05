@@ -1614,7 +1614,7 @@ class AA {
   dispose() {
   }
 }
-const m = class t {
+const d = class t {
   constructor(A) {
     this.terminal = A;
   }
@@ -1667,9 +1667,33 @@ const m = class t {
   dispose() {
   }
 };
-m.URL_REGEX = /(?:https?:\/\/|mailto:|ftp:\/\/|ssh:\/\/|git:\/\/|tel:|magnet:|gemini:\/\/|gopher:\/\/|news:)[\w\-.~:\/?#@!$&*+,;=%]+/gi;
-m.TRAILING_PUNCTUATION = /[.,;!?)\]]+$/;
-let IA = m;
+d.URL_REGEX = /(?:https?:\/\/|mailto:|ftp:\/\/|ssh:\/\/|git:\/\/|tel:|magnet:|gemini:\/\/|gopher:\/\/|news:)[\w\-.~:\/?#@!$&*+,;=%]+/gi;
+d.TRAILING_PUNCTUATION = /[.,;!?)\]]+$/;
+let IA = d;
+function gA(B) {
+  if (!B)
+    return;
+  if (B.startsWith("#")) {
+    let g = B.slice(1);
+    if ((g.length === 3 || g.length === 4) && (g = g[0] + g[0] + g[1] + g[1] + g[2] + g[2] + (g.length === 4 ? g[3] + g[3] : "")), g.length !== 6 && g.length !== 8)
+      return;
+    const I = Number.parseInt(g, 16);
+    return Number.isNaN(I) ? void 0 : g.length === 8 ? {
+      r: I >>> 24 & 255,
+      g: I >>> 16 & 255,
+      b: I >>> 8 & 255,
+      a: I & 255
+    } : { r: I >> 16 & 255, g: I >> 8 & 255, b: I & 255, a: 255 };
+  }
+  const A = B.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (A)
+    return {
+      r: Number.parseInt(A[1], 10),
+      g: Number.parseInt(A[2], 10),
+      b: Number.parseInt(A[3], 10),
+      a: 255
+    };
+}
 const p = {
   foreground: "#d4d4d4",
   background: "#1e1e1e",
@@ -1696,13 +1720,13 @@ const p = {
   brightCyan: "#29b8db",
   brightWhite: "#ffffff"
 };
-class gA {
+class BA {
   constructor(A, g = {}) {
-    this.activeDevicePixelRatio = 0, this.canvasWidth = 0, this.canvasHeight = 0, this.spriteCache = /* @__PURE__ */ new Map(), this.cursorVisible = !0, this.lastCursorPosition = { x: 0, y: 0 }, this.lastCursorVisible = !1, this.lastViewportY = 0, this.currentBuffer = null, this.currentSelectionCoords = null, this.hoveredHyperlinkId = 0, this.previousHoveredHyperlinkId = 0, this.hoveredLinkRange = null, this.previousHoveredLinkRange = null, this.canvas = A;
+    this.defaultBackground = [0, 0, 0], this.defaultBackgroundTransparent = !1, this.activeDevicePixelRatio = 0, this.canvasWidth = 0, this.canvasHeight = 0, this.spriteCache = /* @__PURE__ */ new Map(), this.cursorVisible = !0, this.lastCursorPosition = { x: 0, y: 0 }, this.lastCursorVisible = !1, this.lastViewportY = 0, this.currentBuffer = null, this.currentSelectionCoords = null, this.hoveredHyperlinkId = 0, this.previousHoveredHyperlinkId = 0, this.hoveredLinkRange = null, this.previousHoveredLinkRange = null, this.canvas = A;
     const I = A.getContext("2d", { alpha: !0 });
     if (!I)
       throw new Error("Failed to get 2D rendering context");
-    this.ctx = I, this.fontSize = g.fontSize ?? 15, this.fontFamily = g.fontFamily ?? "monospace", this.cursorStyle = g.cursorStyle ?? "block", this.cursorBlink = g.cursorBlink ?? !1, this.theme = { ...p, ...g.theme }, this.devicePixelRatio = g.devicePixelRatio, this.ghostty = g.ghostty, this.palette = [
+    this.ctx = I, this.fontSize = g.fontSize ?? 15, this.fontFamily = g.fontFamily ?? "monospace", this.cursorStyle = g.cursorStyle ?? "block", this.cursorBlink = g.cursorBlink ?? !1, this.theme = { ...p, ...g.theme }, this.allowTransparency = g.allowTransparency ?? !1, this.defaultBackgroundProvider = g.defaultBackgroundProvider, this.updateDefaultBackground(), this.currentDefaultBackground = this.defaultBackground, this.devicePixelRatio = g.devicePixelRatio, this.ghostty = g.ghostty, this.palette = [
       this.theme.black,
       this.theme.red,
       this.theme.green,
@@ -1752,6 +1776,14 @@ class gA {
   rgbToCSS(A, g, I) {
     return `rgb(${A}, ${g}, ${I})`;
   }
+  updateDefaultBackground() {
+    const A = gA(this.theme.background);
+    this.defaultBackground = A ? [A.r, A.g, A.b] : [0, 0, 0], this.defaultBackgroundTransparent = A !== void 0 && A.a < 255;
+  }
+  resolveDefaultBackground() {
+    var A;
+    return ((A = this.defaultBackgroundProvider) == null ? void 0 : A.call(this)) ?? this.defaultBackground;
+  }
   // ==========================================================================
   // Canvas Sizing
   // ==========================================================================
@@ -1762,7 +1794,7 @@ class gA {
     const I = this.getDevicePixelRatio();
     this.metricsDevicePixelRatio !== I && this.updateFontMetrics(I);
     const C = A * this.deviceMetrics.width, Q = g * this.deviceMetrics.height, E = C / I, D = Q / I;
-    this.activeDevicePixelRatio = I, this.canvasWidth = E, this.canvasHeight = D, this.canvas.style.width = `${E}px`, this.canvas.style.height = `${D}px`, this.canvas.width = C, this.canvas.height = Q, this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.fillStyle = this.theme.background, this.ctx.fillRect(0, 0, C, Q), this.ctx.setTransform(I, 0, 0, I, 0, 0), this.ctx.textBaseline = "alphabetic", this.ctx.textAlign = "left";
+    this.activeDevicePixelRatio = I, this.canvasWidth = E, this.canvasHeight = D, this.canvas.style.width = `${E}px`, this.canvas.style.height = `${D}px`, this.canvas.width = C, this.canvas.height = Q, this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.fillStyle = this.currentDefaultBackgroundCss(), this.ctx.fillRect(0, 0, C, Q), this.ctx.setTransform(I, 0, 0, I, 0, 0), this.ctx.textBaseline = "alphabetic", this.ctx.textAlign = "left";
   }
   // ==========================================================================
   // Main Rendering
@@ -1773,7 +1805,9 @@ class gA {
   render(A, g = !1, I = 0, C, Q = 1) {
     var L;
     this.currentBuffer = A;
-    const E = A.getCursor(), D = A.getDimensions(), i = C ? C.getScrollbackLength() : 0;
+    const E = A.getCursor(), D = A.getDimensions();
+    this.currentDefaultBackground = this.resolveDefaultBackground();
+    const i = C ? C.getScrollbackLength() : 0;
     (L = A.needsFullRedraw) != null && L.call(A) && (g = !0);
     const o = this.getDevicePixelRatio();
     (this.activeDevicePixelRatio !== o || this.canvas.width !== D.cols * this.deviceMetrics.width || this.canvas.height !== D.rows * this.deviceMetrics.height) && (this.resize(D.cols, D.rows), g = !0), I !== this.lastViewportY && (g = !0, this.lastViewportY = I);
@@ -1867,9 +1901,15 @@ class gA {
    * and text in a single pass (cell by cell), the background of cell N would
    * cover any left-extending portions of graphemes from cell N-1.
    */
+  // Background fill for line/clear/resize/scrollbar: the theme color normally,
+  // the live OSC 11 default once it moves past the theme color.
+  currentDefaultBackgroundCss() {
+    const [A, g, I] = this.currentDefaultBackground;
+    return this.allowTransparency && this.defaultBackgroundTransparent && (A !== this.defaultBackground[0] || g !== this.defaultBackground[1] || I !== this.defaultBackground[2]) ? this.rgbToCSS(A, g, I) : this.theme.background;
+  }
   renderLine(A, g, I) {
     const C = g * this.deviceMetrics.height, Q = I * this.deviceMetrics.width;
-    this.ctx.save(), this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.clearRect(0, C, Q, this.deviceMetrics.height), this.ctx.fillStyle = this.theme.background, this.ctx.fillRect(0, C, Q, this.deviceMetrics.height), this.ctx.restore(), this.renderCellBackgrounds(A, g);
+    this.ctx.save(), this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.clearRect(0, C, Q, this.deviceMetrics.height), this.ctx.fillStyle = this.currentDefaultBackgroundCss(), this.ctx.fillRect(0, C, Q, this.deviceMetrics.height), this.ctx.restore(), this.renderCellBackgrounds(A, g);
     for (let E = 0; E < A.length; E++) {
       const D = A[E];
       D.width !== 0 && this.renderCellText(D, E, g);
@@ -1909,8 +1949,14 @@ class gA {
     if (this.isInSelection(g, I))
       return this.theme.selectionBackground;
     let C = A.bg_r, Q = A.bg_g, E = A.bg_b;
-    if (A.flags & c.INVERSE && (C = A.fg_r, Q = A.fg_g, E = A.fg_b), !(C === 0 && Q === 0 && E === 0))
+    if (A.flags & c.INVERSE && (C = A.fg_r, Q = A.fg_g, E = A.fg_b), !(C === 0 && Q === 0 && E === 0)) {
+      if (this.allowTransparency && this.defaultBackgroundTransparent) {
+        const [D, i, o] = this.currentDefaultBackground;
+        if (C === D && Q === i && E === o)
+          return;
+      }
       return this.rgbToCSS(C, Q, E);
+    }
   }
   /**
    * Render a cell's text and decorations (Pass 2 of two-pass rendering)
@@ -2036,7 +2082,7 @@ class gA {
    * Update theme colors
    */
   setTheme(A) {
-    this.theme = { ...p, ...A }, this.spriteCache.clear(), this.palette = [
+    this.theme = { ...p, ...A }, this.updateDefaultBackground(), this.spriteCache.clear(), this.palette = [
       this.theme.black,
       this.theme.red,
       this.theme.green,
@@ -2089,7 +2135,7 @@ class gA {
    */
   renderScrollbar(A, g, I, C = 1) {
     const Q = this.ctx, E = this.canvasHeight, D = this.canvasWidth, i = 8, o = D - i - 4, s = 4, G = E - s * 2;
-    if (Q.clearRect(o - 2, 0, i + 6, E), Q.fillStyle = this.theme.background, Q.fillRect(o - 2, 0, i + 6, E), C <= 0 || g === 0)
+    if (Q.clearRect(o - 2, 0, i + 6, E), Q.fillStyle = this.currentDefaultBackgroundCss(), Q.fillRect(o - 2, 0, i + 6, E), C <= 0 || g === 0)
       return;
     const k = g + I, F = Math.max(20, I / k * G), M = A / g, N = s + (G - F) * (1 - M);
     Q.fillStyle = `rgba(128, 128, 128, ${0.1 * C})`, Q.fillRect(o, s, i, G);
@@ -2154,7 +2200,7 @@ class gA {
    * Clear entire canvas
    */
   clear() {
-    this.ctx.save(), this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.fillStyle = this.theme.background, this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.restore();
+    this.ctx.save(), this.ctx.setTransform(1, 0, 0, 1, 0, 0), this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.fillStyle = this.currentDefaultBackgroundCss(), this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height), this.ctx.restore();
   }
   /**
    * Cleanup resources
@@ -2625,8 +2671,8 @@ const f = class O {
 f.AUTO_SCROLL_EDGE_SIZE = 30;
 f.AUTO_SCROLL_SPEED = 3;
 f.AUTO_SCROLL_INTERVAL = 50;
-let BA = f;
-class wA {
+let CA = f;
+class oA {
   // 200ms fade animation
   constructor(A = {}) {
     this.unicode = {
@@ -2737,7 +2783,7 @@ class wA {
       }
     }, this.handleMouseUp = () => {
       this.isDraggingScrollbar && (this.isDraggingScrollbar = !1, this.scrollbarDragStart = null, this.canvas && (this.canvas.style.userSelect = "", this.canvas.style.webkitUserSelect = ""), this.scrollbarVisible && this.getScrollbackLength() > 0 && this.showScrollbar());
-    }, this.ghostty = A.ghostty ?? iA();
+    }, this.ghostty = A.ghostty ?? wA();
     const g = {
       cols: A.cols ?? 80,
       rows: A.rows ?? 24,
@@ -2832,7 +2878,7 @@ class wA {
       return 0;
     if (A.startsWith("#")) {
       let I = A.slice(1);
-      I.length === 3 && (I = I[0] + I[0] + I[1] + I[1] + I[2] + I[2]);
+      (I.length === 3 || I.length === 4) && (I = I[0] + I[0] + I[1] + I[1] + I[2] + I[2] + (I.length === 4 ? I[3] + I[3] : "")), I.length === 8 && (I = I.slice(0, 6));
       const C = Number.parseInt(I, 16);
       return Number.isNaN(C) ? 0 : C;
     }
@@ -2902,12 +2948,18 @@ class wA {
         i.preventDefault(), I.focus();
       }), this.canvas.addEventListener("touchend", (i) => {
         i.preventDefault(), I.focus();
-      }), this.renderer = new gA(this.canvas, {
+      }), this.renderer = new BA(this.canvas, {
         fontSize: this.options.fontSize,
         fontFamily: this.options.fontFamily,
         cursorStyle: this.options.cursorStyle,
         cursorBlink: !1,
         theme: this.options.theme,
+        allowTransparency: this.options.allowTransparency,
+        defaultBackgroundProvider: () => {
+          var o;
+          const i = (o = this.wasmTerm) == null ? void 0 : o.getColors().background;
+          return i ? [i.r, i.g, i.b] : null;
+        },
         ghostty: this.ghostty
       }), this.renderer.setCursorBlink(this.isFocused && this.options.cursorBlink), this.renderer.resize(this.cols, this.rows), this.scheduleFontRemeasure();
       const C = this.canvas, Q = this.renderer, E = this.wasmTerm, D = {
@@ -2944,7 +2996,7 @@ class wA {
         () => this.copySelection(),
         this.textarea,
         D
-      ), this.selectionManager = new BA(
+      ), this.selectionManager = new CA(
         this,
         this.renderer,
         this.wasmTerm,
@@ -3333,7 +3385,7 @@ class wA {
         const S = N ? "pointer" : "text";
         if (this.element && (this.element.style.cursor = S), this.canvas && (this.canvas.style.cursor = S), this.renderer)
           if (N) {
-            const J = ((L = this.wasmTerm) == null ? void 0 : L.getScrollbackLength()) || 0, U = this.getViewportY(), d = Math.max(0, Math.floor(U)), b = N.range.start.y - J + d, T = N.range.end.y - J + d;
+            const J = ((L = this.wasmTerm) == null ? void 0 : L.getScrollbackLength()) || 0, U = this.getViewportY(), m = Math.max(0, Math.floor(U)), b = N.range.start.y - J + m, T = N.range.end.y - J + m;
             b < this.rows && T >= 0 ? this.renderer.setHoveredLinkRange({
               startX: N.range.start.x,
               startY: Math.max(0, b),
@@ -3474,8 +3526,8 @@ class wA {
     return this.assertOpen(), this.wasmTerm.hasMouseTracking();
   }
 }
-const CA = 2, QA = 1, EA = 15, DA = 100;
-class oA {
+const QA = 2, EA = 1, DA = 15, iA = 100;
+class sA {
   constructor() {
     this._isResizing = !1, this._fitPending = !1;
   }
@@ -3544,7 +3596,7 @@ class oA {
     const Q = window.getComputedStyle(C), E = Number.parseInt(Q.getPropertyValue("padding-top")) || 0, D = Number.parseInt(Q.getPropertyValue("padding-bottom")) || 0, i = Number.parseInt(Q.getPropertyValue("padding-left")) || 0, o = Number.parseInt(Q.getPropertyValue("padding-right")) || 0, s = C.clientWidth, G = C.clientHeight;
     if (s === 0 || G === 0)
       return;
-    const k = s - i - o - EA, F = G - E - D, M = Math.max(CA, Math.floor(k / I.width)), N = Math.max(QA, Math.floor(F / I.height));
+    const k = s - i - o - DA, F = G - E - D, M = Math.max(QA, Math.floor(k / I.width)), N = Math.max(EA, Math.floor(F / I.height));
     return { cols: M, rows: N };
   }
   /**
@@ -3561,15 +3613,15 @@ class oA {
     (A = this._terminal) != null && A.element && (this._resizeObserver || (this._resizeObserver = new ResizeObserver((g) => {
       g[0] && (this._resizeDebounceTimer && clearTimeout(this._resizeDebounceTimer), this._resizeDebounceTimer = setTimeout(() => {
         this.fit();
-      }, DA));
+      }, iA));
     }), this._resizeObserver.observe(this._terminal.element)));
   }
 }
 let l = null;
-async function sA() {
+async function GA() {
   l || (l = await e.load());
 }
-function iA() {
+function wA() {
   if (!l)
     throw new Error(
       `ghostty-web not initialized. Call init() before creating Terminal instances.
@@ -3586,11 +3638,11 @@ For tests, pass a Ghostty instance directly:
   return l;
 }
 export {
-  gA as CanvasRenderer,
+  BA as CanvasRenderer,
   c as CellFlags,
   r as DirtyState,
   H as EventEmitter,
-  oA as FitAddon,
+  sA as FitAddon,
   e as Ghostty,
   v as GhosttyTerminal,
   _ as InputHandler,
@@ -3601,9 +3653,9 @@ export {
   $ as LinkDetector,
   q as Mods,
   AA as OSC8LinkProvider,
-  BA as SelectionManager,
-  wA as Terminal,
+  CA as SelectionManager,
+  oA as Terminal,
   IA as UrlRegexProvider,
-  iA as getGhostty,
-  sA as init
+  wA as getGhostty,
+  GA as init
 };
