@@ -6,6 +6,11 @@ export declare class CanvasRenderer {
     private cursorStyle;
     private cursorBlink;
     private theme;
+    private defaultBackground;
+    private defaultBackgroundTransparent;
+    private allowTransparency;
+    private defaultBackgroundProvider?;
+    private currentDefaultBackground;
     private devicePixelRatio?;
     private ghostty?;
     private activeDevicePixelRatio;
@@ -37,6 +42,8 @@ export declare class CanvasRenderer {
      */
     remeasureFont(): void;
     private rgbToCSS;
+    private updateDefaultBackground;
+    private resolveDefaultBackground;
     /**
      * Resize canvas to fit terminal dimensions
      */
@@ -56,6 +63,7 @@ export declare class CanvasRenderer {
      * and text in a single pass (cell by cell), the background of cell N would
      * cover any left-extending portions of graphemes from cell N-1.
      */
+    private currentDefaultBackgroundCss;
     private renderLine;
     /**
      * Render a cell's background only (Pass 1 of two-pass rendering)
@@ -1449,6 +1457,8 @@ export declare interface RendererOptions {
     cursorStyle?: 'block' | 'underline' | 'bar';
     cursorBlink?: boolean;
     theme?: ITheme;
+    allowTransparency?: boolean;
+    defaultBackgroundProvider?: () => [number, number, number] | null;
     devicePixelRatio?: number;
     ghostty?: Ghostty;
 }
