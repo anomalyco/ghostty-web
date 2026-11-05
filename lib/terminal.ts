@@ -302,12 +302,21 @@ export class Terminal implements ITerminalCore {
   private parseColorToHex(color?: string): number {
     if (!color) return 0;
 
-    // Handle hex colors (#RGB, #RRGGBB)
+    // Handle hex colors (#RGB, #RGBA, #RRGGBB, #RRGGBBAA)
     if (color.startsWith('#')) {
       let hex = color.slice(1);
-      if (hex.length === 3) {
-        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+      if (hex.length === 3 || hex.length === 4) {
+        hex =
+          hex[0] +
+          hex[0] +
+          hex[1] +
+          hex[1] +
+          hex[2] +
+          hex[2] +
+          (hex.length === 4 ? hex[3] + hex[3] : '');
       }
+      // Strip the alpha byte: parsing all 8 digits would shift every channel
+      if (hex.length === 8) hex = hex.slice(0, 6);
       const value = Number.parseInt(hex, 16);
       return Number.isNaN(value) ? 0 : value;
     }
@@ -470,6 +479,11 @@ export class Terminal implements ITerminalCore {
         cursorStyle: this.options.cursorStyle,
         cursorBlink: false,
         theme: this.options.theme,
+        allowTransparency: this.options.allowTransparency,
+        defaultBackgroundProvider: () => {
+          const background = this.wasmTerm?.getColors().background;
+          return background ? [background.r, background.g, background.b] : null;
+        },
         ghostty: this.ghostty!,
       });
       this.renderer.setCursorBlink(this.isFocused && this.options.cursorBlink);

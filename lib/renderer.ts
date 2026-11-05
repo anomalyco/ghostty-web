@@ -48,6 +48,8 @@ export interface RendererOptions {
   cursorStyle?: 'block' | 'underline' | 'bar'; // Default: 'block'
   cursorBlink?: boolean; // Default: false
   theme?: ITheme;
+  allowTransparency?: boolean; // Default: false. See ITerminalOptions.allowTransparency.
+  defaultBackgroundProvider?: () => [number, number, number] | null;
   devicePixelRatio?: number; // Default: window.devicePixelRatio
   ghostty?: Ghostty;
 }
@@ -71,6 +73,48 @@ interface CachedSprite {
 // ============================================================================
 // Default Theme
 // ============================================================================
+
+/** Parse #RGB[A], #RRGGBB[AA] or rgb(r, g, b); alpha defaults to 255. */
+function parseColorToRgb(
+  color?: string
+): { r: number; g: number; b: number; a: number } | undefined {
+  if (!color) return undefined;
+  if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3 || hex.length === 4) {
+      hex =
+        hex[0] +
+        hex[0] +
+        hex[1] +
+        hex[1] +
+        hex[2] +
+        hex[2] +
+        (hex.length === 4 ? hex[3] + hex[3] : '');
+    }
+    if (hex.length !== 6 && hex.length !== 8) return undefined;
+    const value = Number.parseInt(hex, 16);
+    if (Number.isNaN(value)) return undefined;
+    if (hex.length === 8) {
+      return {
+        r: (value >>> 24) & 0xff,
+        g: (value >>> 16) & 0xff,
+        b: (value >>> 8) & 0xff,
+        a: value & 0xff,
+      };
+    }
+    return { r: (value >> 16) & 0xff, g: (value >> 8) & 0xff, b: value & 0xff, a: 255 };
+  }
+  const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    return {
+      r: Number.parseInt(match[1], 10),
+      g: Number.parseInt(match[2], 10),
+      b: Number.parseInt(match[3], 10),
+      a: 255,
+    };
+  }
+  return undefined;
+}
 
 export const DEFAULT_THEME: Required<ITheme> = {
   foreground: '#d4d4d4',
@@ -111,6 +155,11 @@ export class CanvasRenderer {
   private cursorStyle: 'block' | 'underline' | 'bar';
   private cursorBlink: boolean;
   private theme: Required<ITheme>;
+  private defaultBackground: [number, number, number] = [0, 0, 0];
+  private defaultBackgroundTransparent = false;
+  private allowTransparency: boolean;
+  private defaultBackgroundProvider?: () => [number, number, number] | null;
+  private currentDefaultBackground: [number, number, number];
   private devicePixelRatio?: number;
   private ghostty?: Ghostty;
   private activeDevicePixelRatio: number = 0;
@@ -172,6 +221,10 @@ export class CanvasRenderer {
     this.cursorStyle = options.cursorStyle ?? 'block';
     this.cursorBlink = options.cursorBlink ?? false;
     this.theme = { ...DEFAULT_THEME, ...options.theme };
+    this.allowTransparency = options.allowTransparency ?? false;
+    this.defaultBackgroundProvider = options.defaultBackgroundProvider;
+    this.updateDefaultBackground();
+    this.currentDefaultBackground = this.defaultBackground;
     this.devicePixelRatio = options.devicePixelRatio;
     this.ghostty = options.ghostty;
 
@@ -270,6 +323,16 @@ export class CanvasRenderer {
     return `rgb(${r}, ${g}, ${b})`;
   }
 
+  private updateDefaultBackground(): void {
+    const parsed = parseColorToRgb(this.theme.background);
+    this.defaultBackground = parsed ? [parsed.r, parsed.g, parsed.b] : [0, 0, 0];
+    this.defaultBackgroundTransparent = parsed !== undefined && parsed.a < 255;
+  }
+
+  private resolveDefaultBackground(): [number, number, number] {
+    return this.defaultBackgroundProvider?.() ?? this.defaultBackground;
+  }
+
   // ==========================================================================
   // Canvas Sizing
   // ==========================================================================
@@ -302,7 +365,7 @@ export class CanvasRenderer {
 
     // Fill the backing store in physical pixels before restoring CSS coordinates.
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.ctx.fillStyle = this.theme.background;
+    this.ctx.fillStyle = this.currentDefaultBackgroundCss();
     this.ctx.fillRect(0, 0, width, height);
     this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
@@ -332,6 +395,7 @@ export class CanvasRenderer {
     // Multiple update() calls are safe - dirty state persists until clearDirty().
     const cursor = buffer.getCursor();
     const dims = buffer.getDimensions();
+    this.currentDefaultBackground = this.resolveDefaultBackground();
     const scrollbackLength = scrollbackProvider ? scrollbackProvider.getScrollbackLength() : 0;
 
     // Check if buffer needs full redraw (e.g., screen change between normal/alternate)
@@ -566,11 +630,24 @@ export class CanvasRenderer {
    * and text in a single pass (cell by cell), the background of cell N would
    * cover any left-extending portions of graphemes from cell N-1.
    */
+  // Background fill for line/clear/resize/scrollbar: the theme color normally,
+  // the live OSC 11 default once it moves past the theme color.
+  private currentDefaultBackgroundCss(): string {
+    const [r, g, b] = this.currentDefaultBackground;
+    return this.allowTransparency &&
+      this.defaultBackgroundTransparent &&
+      (r !== this.defaultBackground[0] ||
+        g !== this.defaultBackground[1] ||
+        b !== this.defaultBackground[2])
+      ? this.rgbToCSS(r, g, b)
+      : this.theme.background;
+  }
+
   private renderLine(line: GhosttyCell[], y: number, cols: number): void {
     const lineY = y * this.deviceMetrics.height;
     const lineWidth = cols * this.deviceMetrics.width;
 
-    // Clear line background then fill with theme color.
+    // Clear line background then fill it with the theme color or the OSC default.
     // We clear just the cell area - glyph overflow is handled by also
     // redrawing adjacent rows (see render() method).
     // clearRect is needed because fillRect composites rather than replaces,
@@ -578,7 +655,7 @@ export class CanvasRenderer {
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, lineY, lineWidth, this.deviceMetrics.height);
-    this.ctx.fillStyle = this.theme.background;
+    this.ctx.fillStyle = this.currentDefaultBackgroundCss();
     this.ctx.fillRect(0, lineY, lineWidth, this.deviceMetrics.height);
     this.ctx.restore();
 
@@ -656,8 +733,19 @@ export class CanvasRenderer {
       bg_b = cell.fg_b;
     }
 
-    // The theme background drawn for the full line shows through for default cells.
+    // The theme background is drawn once for the full line and shows through
+    // for default cells; the cell ABI has no default-vs-explicit marker, so
+    // the historical sentinel is RGB zero.
     if (bg_r === 0 && bg_g === 0 && bg_b === 0) return;
+
+    // allowTransparency: with a transparent theme background, skip cells still
+    // carrying the current default (OSC 11 may have changed it) so the backdrop
+    // shows through. An explicit color equal to the default hits the same
+    // sentinel trade-off.
+    if (this.allowTransparency && this.defaultBackgroundTransparent) {
+      const [dr, dg, db] = this.currentDefaultBackground;
+      if (bg_r === dr && bg_g === dg && bg_b === db) return;
+    }
     return this.rgbToCSS(bg_r, bg_g, bg_b);
   }
 
@@ -947,6 +1035,7 @@ export class CanvasRenderer {
    */
   public setTheme(theme: ITheme): void {
     this.theme = { ...DEFAULT_THEME, ...theme };
+    this.updateDefaultBackground();
     this.spriteCache.clear();
 
     // Rebuild palette
@@ -1033,7 +1122,7 @@ export class CanvasRenderer {
 
     // Always clear the scrollbar area first (fixes ghosting when fading out)
     ctx.clearRect(scrollbarX - 2, 0, scrollbarWidth + 6, canvasHeight);
-    ctx.fillStyle = this.theme.background;
+    ctx.fillStyle = this.currentDefaultBackgroundCss();
     ctx.fillRect(scrollbarX - 2, 0, scrollbarWidth + 6, canvasHeight);
 
     // Don't draw scrollbar if fully transparent or no scrollback
@@ -1154,7 +1243,7 @@ export class CanvasRenderer {
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = this.theme.background;
+    this.ctx.fillStyle = this.currentDefaultBackgroundCss();
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.restore();
   }

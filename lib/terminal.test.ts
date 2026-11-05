@@ -1670,6 +1670,82 @@ describe('Terminal Config', () => {
       term.dispose();
     }
   });
+
+  test('should keep RGB channels of 8-digit hex colors instead of shifting them', async () => {
+    if (typeof document === 'undefined') return;
+
+    const term = await createIsolatedTerminal({
+      cols: 80,
+      rows: 24,
+      theme: {
+        foreground: '#fabcd8ff',
+        background: '#16161600',
+      },
+    });
+    const container = document.createElement('div');
+    term.open(container);
+
+    try {
+      const colors = term.wasmTerm!.getColors();
+      expect(colors.foreground).toEqual({ r: 0xfa, g: 0xbc, b: 0xd8 });
+      expect(colors.background).toEqual({ r: 0x16, g: 0x16, b: 0x16 });
+    } finally {
+      term.dispose();
+    }
+  });
+
+  test('should expand 4-digit hex colors and drop the alpha nibble', async () => {
+    if (typeof document === 'undefined') return;
+
+    const term = await createIsolatedTerminal({
+      cols: 80,
+      rows: 24,
+      theme: {
+        foreground: '#fbd8',
+        background: '#1610',
+      },
+    });
+    const container = document.createElement('div');
+    term.open(container);
+
+    try {
+      const colors = term.wasmTerm!.getColors();
+      expect(colors.foreground).toEqual({ r: 0xff, g: 0xbb, b: 0xdd });
+      expect(colors.background).toEqual({ r: 0x11, g: 0x66, b: 0x11 });
+    } finally {
+      term.dispose();
+    }
+  });
+
+  test('should skip OSC-updated default cells under transparency', async () => {
+    if (typeof document === 'undefined') return;
+
+    const term = await createIsolatedTerminal({
+      cols: 8,
+      rows: 2,
+      allowTransparency: true,
+      theme: {
+        foreground: '#fabcd8ff',
+        background: '#16161600',
+      },
+    });
+    const container = document.createElement('div');
+    term.open(container);
+
+    try {
+      term.write('\x1b]11;#334455\x07\x1b[48;2;22;22;22m \x1b[0m');
+      const renderer = term.renderer as any;
+      renderer.render(term.wasmTerm!, true);
+
+      const line = term.wasmTerm!.getLine(0);
+      expect(line[0].bg_r).toBe(22); // explicit old theme color
+      expect(line[1].bg_r).toBe(51); // default moved by OSC 11
+      expect(renderer.getCellBackground(line[0], 0, 0)).toBe('rgb(22, 22, 22)');
+      expect(renderer.getCellBackground(line[1], 1, 0)).toBeUndefined();
+    } finally {
+      term.dispose();
+    }
+  });
 });
 
 describe('Terminal Modes', () => {
